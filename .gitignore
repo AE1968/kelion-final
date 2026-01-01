@@ -1,0 +1,16 @@
+# Storage and logs
+storage/
+*.sqlite
+*.log
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

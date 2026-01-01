@@ -1,0 +1,17 @@
+RewriteEngine On
+
+# Redirect root to k.php
+RewriteRule ^$ /k.php [L,R=301]
+
+# Security: Deny access to sensitive files
+<FilesMatch "^(config\.php|\.env|\.git|storage)">
+    Require all denied
+</FilesMatch>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
