@@ -201,6 +201,21 @@ function db_migrate_columns(): void
     @$db->exec("ALTER TABLE users ADD COLUMN age_confirmed INTEGER NOT NULL DEFAULT 0");
   }
 
+  // users.reset_token (for password reset)
+  if (empty($cols['reset_token'])) {
+    @$db->exec("ALTER TABLE users ADD COLUMN reset_token TEXT");
+  }
+
+  // users.reset_expires (for password reset expiry)
+  if (empty($cols['reset_expires'])) {
+    @$db->exec("ALTER TABLE users ADD COLUMN reset_expires TEXT");
+  }
+
+  // users.verify_token (for email verification)
+  if (empty($cols['verify_token'])) {
+    @$db->exec("ALTER TABLE users ADD COLUMN verify_token TEXT");
+  }
+
   // consents.age_confirmed
   $cols2 = [];
   $res2 = $db->query("PRAGMA table_info(consents)");

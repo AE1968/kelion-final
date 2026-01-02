@@ -31,11 +31,13 @@ function require_policy_consent(): void
 
 
 // ---------------- Views ----------------
-function render_login(?string $err = null): void
+function render_login(?string $err = null, ?string $msg = null): void
 {
   page_header('Login');
   echo '<div class="wrap"><div class="card" style="max-width:520px;margin:0 auto">';
   echo '<h2>Login</h2><p class="mut">UI is English. After login, speak/type in your language.</p>';
+  if ($msg)
+    echo '<div class="ok">' . h($msg) . '</div><div style="height:8px"></div>';
   if ($err)
     echo '<div class="err">' . h($err) . '</div><div style="height:8px"></div>';
   echo '<form method="post" action="k.php?r=login_post">';
@@ -44,13 +46,91 @@ function render_login(?string $err = null): void
   echo '<div style="height:10px"></div>';
   echo '<label class="mut">Password</label><input type="password" name="password" autocomplete="current-password" required>';
   echo '<div style="height:12px"></div>';
-  echo '<button class="btn" type="submit">Login</button>';
+  echo '<button class="btn btn2" type="submit">Login</button>';
   echo '</form>';
   echo '<div style="height:14px"></div>';
   echo '<div class="mut">Demo: <b>demo / demo</b></div>';
+  echo '<div style="height:10px"></div>';
+  echo '<div class="row">';
+  echo '<a href="k.php?r=register" class="btn" style="text-align:center">Create Account</a>';
+  echo '<a href="k.php?r=forgot" class="btn" style="text-align:center">Forgot Password</a>';
+  echo '</div>';
   echo '</div></div>';
   page_footer();
 }
+
+function render_register(?string $err = null, ?string $msg = null): void
+{
+  page_header('Create Account');
+  echo '<div class="wrap"><div class="card" style="max-width:520px;margin:0 auto">';
+  echo '<h2>Create Account</h2><p class="mut">Register to access KELION AI.</p>';
+  if ($msg)
+    echo '<div class="ok">' . h($msg) . '</div><div style="height:8px"></div>';
+  if ($err)
+    echo '<div class="err">' . h($err) . '</div><div style="height:8px"></div>';
+  echo '<form method="post" action="k.php?r=register_post">';
+  echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
+  echo '<label class="mut">Username</label><input name="username" autocomplete="username" required minlength="3">';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Email</label><input type="email" name="email" autocomplete="email" required>';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Password</label><input type="password" name="password" autocomplete="new-password" required minlength="6">';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Confirm Password</label><input type="password" name="password2" autocomplete="new-password" required>';
+  echo '<div style="height:12px"></div>';
+  echo '<button class="btn btn2" type="submit">Register</button>';
+  echo '</form>';
+  echo '<div style="height:14px"></div>';
+  echo '<a href="k.php?r=login" class="btn" style="display:inline-block;text-align:center">Back to Login</a>';
+  echo '</div></div>';
+  page_footer();
+}
+
+function render_forgot(?string $err = null, ?string $msg = null): void
+{
+  page_header('Forgot Password');
+  echo '<div class="wrap"><div class="card" style="max-width:520px;margin:0 auto">';
+  echo '<h2>Forgot Password</h2><p class="mut">Enter your email to receive a reset link.</p>';
+  if ($msg)
+    echo '<div class="ok">' . h($msg) . '</div><div style="height:8px"></div>';
+  if ($err)
+    echo '<div class="err">' . h($err) . '</div><div style="height:8px"></div>';
+  echo '<form method="post" action="k.php?r=forgot_post">';
+  echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
+  echo '<label class="mut">Email</label><input type="email" name="email" autocomplete="email" required>';
+  echo '<div style="height:12px"></div>';
+  echo '<button class="btn btn2" type="submit">Send Reset Link</button>';
+  echo '</form>';
+  echo '<div style="height:14px"></div>';
+  echo '<a href="k.php?r=login" class="btn" style="display:inline-block;text-align:center">Back to Login</a>';
+  echo '</div></div>';
+  page_footer();
+}
+
+function render_reset(?string $err = null): void
+{
+  $email = (string)($_GET['email'] ?? '');
+  $token = (string)($_GET['token'] ?? '');
+  
+  page_header('Reset Password');
+  echo '<div class="wrap"><div class="card" style="max-width:520px;margin:0 auto">';
+  echo '<h2>Reset Password</h2><p class="mut">Enter your new password.</p>';
+  if ($err)
+    echo '<div class="err">' . h($err) . '</div><div style="height:8px"></div>';
+  echo '<form method="post" action="k.php?r=reset_post">';
+  echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
+  echo '<input type="hidden" name="email" value="' . h($email) . '">';
+  echo '<input type="hidden" name="token" value="' . h($token) . '">';
+  echo '<label class="mut">New Password</label><input type="password" name="password" autocomplete="new-password" required minlength="6">';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Confirm Password</label><input type="password" name="password2" required>';
+  echo '<div style="height:12px"></div>';
+  echo '<button class="btn btn2" type="submit">Set New Password</button>';
+  echo '</form>';
+  echo '</div></div>';
+  page_footer();
+}
+
 
 function render_home(): void
 {
@@ -1595,6 +1675,118 @@ if ($r === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   redirect('k.php?r=home');
 }
 
+// User Registration
+if ($r === 'register_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  // Rate limit registration
+  global $CONFIG;
+  $limit = (int)($CONFIG['security']['rate_limit']['register_per_ip_per_10min'] ?? 10);
+  if (!rate_limit_hit('register:' . ip_hash(), $limit, 600)) {
+    render_register('Too many registration attempts. Try again later.');
+    exit;
+  }
+  
+  csrf_check();
+  $username = trim((string)($_POST['username'] ?? ''));
+  $email = trim((string)($_POST['email'] ?? ''));
+  $password = (string)($_POST['password'] ?? '');
+  $password2 = (string)($_POST['password2'] ?? '');
+  
+  if ($password !== $password2) {
+    render_register('Passwords do not match.');
+    exit;
+  }
+  
+  $result = user_register($username, $email, $password);
+  if (!$result['ok']) {
+    render_register($result['error']);
+    exit;
+  }
+  
+  // Send verification email if SMTP is enabled
+  $smtpEnabled = $CONFIG['mail']['smtp']['enabled'] ?? false;
+  if ($smtpEnabled && function_exists('send_mail')) {
+    $verifyUrl = 'https://kelionai.app/k.php?r=verify&token=' . urlencode($result['verify_token']);
+    $subject = 'Verify your KELION AI account';
+    $body = "Hello $username,\n\nPlease verify your email by clicking:\n$verifyUrl\n\nWelcome to KELION AI!";
+    send_mail($email, $subject, $body);
+  }
+  
+  render_login(null, 'Account created! You can now log in.');
+  exit;
+}
+
+// Forgot Password Request
+if ($r === 'forgot_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  csrf_check();
+  $email = trim((string)($_POST['email'] ?? ''));
+  
+  if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    render_forgot('Please enter a valid email address.');
+    exit;
+  }
+  
+  $result = password_reset_create($email);
+  
+  // Always show success message (don't reveal if email exists)
+  if ($result['ok']) {
+    global $CONFIG;
+    $smtpEnabled = $CONFIG['mail']['smtp']['enabled'] ?? false;
+    if ($smtpEnabled && function_exists('send_mail')) {
+      $resetUrl = 'https://kelionai.app/k.php?r=reset&email=' . urlencode($email) . '&token=' . urlencode($result['token']);
+      $subject = 'KELION AI - Password Reset';
+      $body = "Hello,\n\nClick to reset your password:\n$resetUrl\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.";
+      send_mail($email, $subject, $body);
+    }
+    
+    // Log the reset token for testing (when SMTP is disabled)
+    $logFile = __DIR__ . '/storage/password_reset_log.txt';
+    @file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Reset for $email - Token: " . ($result['token'] ?? 'N/A') . "\n", FILE_APPEND | LOCK_EX);
+  }
+  
+  render_forgot(null, 'If an account exists with that email, you will receive a reset link.');
+  exit;
+}
+
+// Password Reset Completion
+if ($r === 'reset_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  csrf_check();
+  $email = trim((string)($_POST['email'] ?? ''));
+  $token = trim((string)($_POST['token'] ?? ''));
+  $password = (string)($_POST['password'] ?? '');
+  $password2 = (string)($_POST['password2'] ?? '');
+  
+  if ($password !== $password2) {
+    render_reset('Passwords do not match.');
+    exit;
+  }
+  
+  if (strlen($password) < 6) {
+    render_reset('Password must be at least 6 characters.');
+    exit;
+  }
+  
+  $result = password_reset_complete($email, $token, $password);
+  if (!$result['ok']) {
+    render_reset($result['error']);
+    exit;
+  }
+  
+  render_login(null, 'Password reset successful! You can now log in.');
+  exit;
+}
+
+// Email Verification
+if ($r === 'verify') {
+  $token = trim((string)($_GET['token'] ?? ''));
+  if ($token !== '' && email_verify($token)) {
+    render_login(null, 'Email verified! You can now log in.');
+  } else {
+    render_login('Invalid or expired verification link.');
+  }
+  exit;
+}
+
+
 if ($r === 'reconnect_start' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   require_login();
   csrf_check();
@@ -1790,6 +1982,15 @@ switch ($r) {
     break;
   case 'login':
     render_login();
+    break;
+  case 'register':
+    render_register();
+    break;
+  case 'forgot':
+    render_forgot();
+    break;
+  case 'reset':
+    render_reset();
     break;
   case 'reconnect':
     render_reconnect();
