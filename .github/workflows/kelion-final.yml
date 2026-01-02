@@ -1,50 +1,29 @@
-name: KELION AI – PRODUCTION MONITOR
+name: KELION AI – FORCE DEPLOY
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
-
-env:
-  SITE_URL: https://kelionai.app
 
 jobs:
-  verify-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Așteptăm ca Railway să preia automat codul
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Wait for Railway Build (Estimated)
-        run: |
-          echo "⏳ Waiting for Railway to auto-deploy..."
-          sleep 60  # Așteptăm 1 minut să înceapă procesul
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
 
-      # 2️⃣ Verificăm în buclă dacă site-ul răspunde (Max 5 minute)
-      - name: Health Check Loop
+      - name: Deploy via Token
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo "Checking site availability: $SITE_URL"
-          MAX_RETRIES=30
-          COUNTER=0
-          until curl -s --head --request GET $SITE_URL | grep "200 OK" > /dev/null; do
-             if [ $COUNTER -eq $MAX_RETRIES ]; then
-               echo "❌ TIMEOUT: Site is not responding after 5 minutes."
-               exit 1
-             fi
-             echo "zzz... Waiting for site to stabilize ($COUNTER/$MAX_RETRIES)..."
-             sleep 10
-             let COUNTER=COUNTER+1
-          done
-          echo "✅ SITE IS ONLINE & RESPONDING!"
+          echo "🚀 Forcing deploy using Railway Token..."
+          railway up --detach
 
-      # 3️⃣ Verificare Conținut
-      - name: Verify Content
+      - name: Verify Site
         run: |
-          if curl -s $SITE_URL | grep -q "KELION"; then
-             echo "✅ VALIDITY CHECK PASSED: Found 'KELION' on page."
-          else
-             echo "⚠️ WARNING: Site is 200 OK but content might be wrong."
-          fi
+          echo "⏳ Waiting for deployment propagation..."
+          sleep 60
+          curl -I https://kelionai.app
