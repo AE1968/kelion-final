@@ -135,7 +135,7 @@ function render_reset(?string $err = null): void
 function render_home(): void
 {
   global $CONFIG;
-  $version = explode(' ', $CONFIG['app']['version'] ?? 'v1.0.7')[0];
+  $version = $CONFIG['app']['version'] ?? 'v1.0.2';
   $u = current_user();
   $username = $u ? h($u['username']) : 'OFFLINE';
   $cloudStatus = $u ? 'CONNECTED' : 'DISCONNECTED';
@@ -641,8 +641,7 @@ function render_home(): void
     <div id="header">
       <div id="status-display">
         <div class="status-row top">
-          <span
-            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?></span>
+          <!-- Version removed for cleaner UI -->
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
@@ -786,23 +785,19 @@ function render_home(): void
           if (typeof HologramUnit !== 'undefined') {
             window.hologram = new HologramUnit('hologram-container', (p) => console.log('Loading:', Math.round(p) + '%'));
 
-            // Wait for model to load, then activate based on login state
-            setTimeout(() => {
-              if (window.hologram) {
-                if (isLoggedIn) {
-                  // User is logged in - activate eyes and full mode
-                  window.hologram.activateFullMode();
-                  console.log("User logged in: Hologram FULLY ACTIVATED");
-                } else {
-                  // User not logged in - eyes dim
-                  window.hologram.deactivateEyes();
-                  console.log("User not logged in: Eyes deactivated");
-                }
-              }
-            }, 2000); // Wait for GLB to load
+            // Wait for 'onReady' callback from Hologram (Sync fix)
+            window.hologram.onReady = () => {
+              // Activate internal systems
+              window.hologram.enableAudioInteraction();
+              window.hologram.activateFullMode();
+
+              // Execute Greeting Routine (Time-Aware)
+              setTimeout(() => {
+                window.hologram.routineGreet();
+              }, 500);
+            };
           }
-          // Play welcome after a brief delay
-          setTimeout(speakWelcome, 500);
+
         }, 1000);
       }, 2500);
     </script>
