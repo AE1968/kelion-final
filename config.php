@@ -2,7 +2,7 @@
 return [
   'app' => [
     'name' => 'KELION AI',
-    'version' => 'v1.0.2',
+    'version' => 'v1.0.3',
     'base_url' => '',
     'timezone' => 'Europe/London',
     'default_ui_lang' => 'English',
