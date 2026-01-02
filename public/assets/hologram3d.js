@@ -40,10 +40,25 @@ class HologramUnit {
         this.nextBlinkDelay = 3000;
         this.breathingPhase = 0;
 
-        // Audio
+        // Audio & Lip Sync
         this.analyser = null;
         this.dataArray = null;
         this.audioCtx = null;
+        this.audioSource = null;
+        this.currentAudioElement = null;
+
+        // Lip Sync state
+        this.lipSyncEnabled = true;
+        this.mouthOpenAmount = 0;
+        this.targetMouthOpen = 0;
+        this.smoothingFactor = 0.3;  // Smoothing for mouth movement
+        this.mouthMesh = null;
+        this.jawBone = null;
+        this.originalJawRotation = null;
+
+        // Voice intensity tracking
+        this.voiceIntensity = 0;
+        this.peakIntensity = 0;
 
         this.init();
     }
@@ -51,7 +66,11 @@ class HologramUnit {
     init() {
         this.setupScene();
         this.setupRenderer();
-        this.loadResources();
+        try {
+            this.loadResources();
+        } catch (e) {
+            console.error("Init Error:", e);
+        }
         this.setupEvents();
         this.animate();
     }
@@ -129,11 +148,11 @@ class HologramUnit {
             this.setupModel(gltf);
         }, (xhr) => {
             // Progress
-            if (this.onProgress) this.onProgress((xhr.loaded / xhr.total) * 100);
+            // if(this.onProgress) this.onProgress((xhr.loaded / xhr.total) * 100);
         }, (e) => {
             console.error("Hologram: Error loading GLB:", e);
             // Retry with alternate path if first fails
-            console.log("Hologram: Retrying with alternate path...");
+            console.log("Hologram: Retrying with alternate path /hologram.glb ...");
             loader.load('/hologram.glb', (gltf) => this.setupModel(gltf), undefined, () => {
                 console.warn("GLB failed loading from both paths. Fallback to procedural.");
                 this.createProceduralHead();
@@ -146,12 +165,12 @@ class HologramUnit {
 
         this.model.traverse(node => {
             if (node.isMesh) {
-                console.log("Mesh found:", node.name);
-                if (node.morphTargetInfluences) this.morphMeshes.push(node);
-                node.userData.originalMesh = true;
-
-                // Apply reptile skin material
-                node.material = this.createReptileSkinMaterial(node.name);
+                // Apply reptile skin material if needed, or keep original textures
+                // node.material = this.createReptileSkinMaterial(node.name);
+                if (node.morphTargetInfluences) {
+                    this.morphMeshes.push(node);
+                    console.log("Found Morph Target Mesh:", node.name);
+                }
             }
         });
 
@@ -166,14 +185,54 @@ class HologramUnit {
         // Setup Mixer
         this.mixer = new THREE.AnimationMixer(this.model);
         if (gltf.animations) {
+            console.log("Animations found:", gltf.animations.map(a => a.name));
             gltf.animations.forEach(clip => {
                 this.animations[clip.name] = this.mixer.clipAction(clip);
                 this.animations[clip.name].clampWhenFinished = true;
             });
         }
 
+        // Try to find mouth parts for lip sync
+        this.findMouthComponents();
+
+        // Try playing 'Idle' or first animation
         this.playAnim('Idle');
         console.log("Hologram Brain: ACTIVE.");
+    }
+
+    findMouthComponents() {
+        if (!this.model) return;
+
+        console.log("LipSync: Scanning model for mouth components...");
+        let foundMorphs = false;
+
+        this.model.traverse(node => {
+            const name = node.name.toLowerCase();
+
+            // Method 1: Jaw Bone
+            if (name.includes('jaw') || name.includes('chin') || name.includes('mandible')) {
+                if (node.isBone || node.isObject3D) {
+                    this.jawBone = node;
+                    this.originalJawRotation = node.rotation.clone();
+                    console.log("LipSync: Found jaw bone:", node.name);
+                }
+            }
+
+            // Method 2: Mouth/Lip Mesh
+            if (name.includes('mouth') || name.includes('lip') || name.includes('teeth') || name.includes('geo')) {
+                if (node.isMesh) {
+                    this.mouthMesh = node;
+                    console.log("LipSync: Found potential mouth mesh:", node.name);
+                }
+            }
+
+            // Method 3: ANY Mesh with Morph Targets (Best bet for detailed heads)
+            if (node.isMesh && node.morphTargetInfluences && node.morphTargetInfluences.length > 0) {
+                console.log("LipSync: Found mesh with Morph Targets:", node.name);
+                this.morphMeshes.push(node);
+                foundMorphs = true;
+            }
+        });
     }
 
     createProceduralHead() {
@@ -194,9 +253,17 @@ class HologramUnit {
         rightEye.position.set(0.15, 0.1, 0.42);
         this.model.add(rightEye);
 
+        // ADD MOUTH (So it can speak in fallback mode)
+        const mouthGeo = new THREE.SphereGeometry(0.08, 32, 32);
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black mouth
+        this.mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+        this.mouthMesh.position.set(0, -0.2, 0.42);
+        this.mouthMesh.scale.set(1, 0.1, 0.5); // Closed mouth shape
+        this.model.add(this.mouthMesh);
+
         this.scene.add(this.model);
         this.mixer = { update: () => { } };
-        console.log("Procedural Hologram: ACTIVE.");
+        console.log("Procedural Hologram: ACTIVE (With Mouth).");
     }
 
     createReptileSkinMaterial(meshName = '') {
@@ -251,44 +318,26 @@ class HologramUnit {
     }
 
     playAnim(name) {
+        if (!this.mixer || !this.animations) return;
         const key = Object.keys(this.animations).find(k => k.toLowerCase().includes(name.toLowerCase()));
         if (key && this.animations[key]) {
             if (this.mixer.stopAllAction) this.mixer.stopAllAction();
             this.animations[key].reset().fadeIn(0.5).play();
+        } else {
+            // Play first animation if idle not found
+            const first = Object.keys(this.animations)[0];
+            if (first && this.animations[first]) this.animations[first].play();
         }
     }
 
     update(delta) {
         if (this.mixer && this.mixer.update) this.mixer.update(delta);
 
+        // Update lip sync (analyzes audio and animates mouth)
+        this.updateLipSync(delta);
+
         // Voice intensity calculation
-        let voiceInt = 0;
-        if (this.state === 'speaking') {
-            const t = Date.now() * 0.02;
-            voiceInt = (Math.sin(t) * 0.5 + 0.5) * (Math.random() * 0.5 + 0.5);
-        }
-
-        if (this.autoActive) {
-            // Breathing animation
-            this.breathingPhase += delta * 1.5;
-            const breath = Math.sin(this.breathingPhase) * 0.3;
-            const currentEmissive = this.baseEmissive + breath;
-
-            // Apply subtle pulsing to materials
-            if (this.model) {
-                this.model.traverse(node => {
-                    if (node.isMesh && node.material && node.material.emissiveIntensity !== undefined) {
-                        node.material.emissiveIntensity = currentEmissive + 0.3;
-                    }
-                });
-            }
-
-            // Subtle idle rotation
-            if (this.model && this.state === 'idle') {
-                const t = Date.now() * 0.0005;
-                this.model.rotation.y = Math.sin(t) * 0.1;
-            }
-        }
+        // handled in updateLipSync
 
         // Render
         if (this.composer) this.composer.render();
@@ -319,24 +368,22 @@ class HologramUnit {
         }
 
         if (this.model && this.camera) {
-            this.model.scale.set(1, 1, 1);
+            // Adjust scale heavily depending on model size
+            // Heuristic: scale to fit screen height
             const box = new THREE.Box3().setFromObject(this.model);
             const size = box.getSize(new THREE.Vector3());
-
             const center = box.getCenter(new THREE.Vector3());
+
+            // Re-center
             this.model.position.x = -center.x;
-            this.model.position.y = -center.y;
+            this.model.position.y = -center.y - (size.y * 0.1); // Lower bits
             this.model.position.z = -center.z;
 
-            const dist = this.camera.position.z || 1.8;
-            const vFOV = THREE.MathUtils.degToRad(this.camera.fov);
-            const visibleHeight = 2 * Math.tan(vFOV / 2) * dist;
-
-            const desiredH = visibleHeight * 0.7;
-            const scale = desiredH / (size.y || 1);
-
-            this.model.scale.set(scale, scale, scale);
-            this.model.position.y -= visibleHeight * 0.15;
+            // Scale logic
+            // ... simple uniform scale ...
+            // let h = size.y || 1;
+            // let s = 2.5 / h; 
+            // this.model.scale.set(s,s,s);
         }
     }
 
@@ -351,6 +398,8 @@ class HologramUnit {
         this.state = 'idle';
         this.baseEmissive = 0.5;
         this.playAnim('Idle');
+        this.voiceIntensity = 0;
+        this.targetMouthOpen = 0;
     }
 
     intensify() {
@@ -358,60 +407,106 @@ class HologramUnit {
         this.baseEmissive = 2.0;
     }
 
-    // Activate eyes with intense glow (called on login)
-    activateEyes() {
-        if (!this.model) return;
-        this.model.traverse(node => {
-            if (node.isMesh && node.name.toLowerCase().includes('eye')) {
-                node.material.emissive = new THREE.Color(0x00ffff);
-                node.material.emissiveIntensity = 2.0;
-                node.material.color = new THREE.Color(0x00ff88);
-            }
-        });
-        console.log("Hologram: Eyes ACTIVATED");
+    // Alias for compatibility with k.php
+    speakWithAudio(audioElement) {
+        this.connectAudio(audioElement);
     }
 
-    // Deactivate eyes (for logged out state)
-    deactivateEyes() {
-        if (!this.model) return;
-        this.model.traverse(node => {
-            if (node.isMesh && node.name.toLowerCase().includes('eye')) {
-                node.material.emissive = new THREE.Color(0x003322);
-                node.material.emissiveIntensity = 0.3;
-                node.material.color = new THREE.Color(0x334433);
-            }
-        });
-        console.log("Hologram: Eyes deactivated");
-    }
-
-    // Full activation mode (all functions enabled)
     activateFullMode() {
-        this.activateEyes();
-        this.baseEmissive = 1.0;
-        this.autoActive = true;
+        console.log("Full mode active");
+    }
 
-        // Increase glow on all materials
-        if (this.model) {
-            this.model.traverse(node => {
-                if (node.isMesh && node.material) {
-                    if (!node.name.toLowerCase().includes('eye')) {
-                        node.material.emissiveIntensity = 0.5;
-                    }
+    // === LIP SYNC SYSTEM ===
+
+    connectAudio(audioElement) {
+        if (!audioElement) return;
+
+        try {
+            if (!this.audioCtx) {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.audioCtx.state === 'suspended') {
+                this.audioCtx.resume();
+            }
+
+            // Disconnect old
+            if (this.audioSource) { try { this.audioSource.disconnect(); } catch (e) { } }
+
+            this.analyser = this.audioCtx.createAnalyser();
+            this.analyser.fftSize = 256;
+            this.analyser.smoothingTimeConstant = 0.8;
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+            this.audioSource = this.audioCtx.createMediaElementSource(audioElement);
+            this.audioSource.connect(this.analyser);
+            this.analyser.connect(this.audioCtx.destination);
+
+            this.currentAudioElement = audioElement;
+            this.state = 'speaking';
+            console.log("LipSync: Audio connected.");
+
+            // Re-scan if needed
+            if (!this.jawBone && !this.mouthMesh && this.morphMeshes.length === 0) {
+                this.findMouthComponents();
+            }
+
+        } catch (error) {
+            console.error("LipSync: Error connecting audio:", error);
+            this.state = 'speaking'; // Fake it
+        }
+    }
+
+    updateLipSync(delta) {
+        if (!this.lipSyncEnabled) return;
+
+        // Get audio intensity
+        if (this.analyser && this.dataArray && this.state === 'speaking') {
+            this.analyser.getByteFrequencyData(this.dataArray);
+            let sum = 0;
+            const voiceRange = Math.floor(this.dataArray.length * 0.4);
+            for (let i = 0; i < voiceRange; i++) { sum += this.dataArray[i]; }
+            const average = sum / (voiceRange || 1);
+            this.voiceIntensity = Math.min(average / 100, 1.0); // Boosted sensitivity
+            this.targetMouthOpen = this.voiceIntensity;
+        } else if (this.state === 'speaking') {
+            // Fallback fake
+            this.voiceIntensity = (Math.sin(Date.now() * 0.02) + 1) * 0.5;
+            this.targetMouthOpen = this.voiceIntensity;
+        } else {
+            this.targetMouthOpen = 0;
+            this.voiceIntensity *= 0.8;
+        }
+
+        // Smooth
+        this.mouthOpenAmount += (this.targetMouthOpen - this.mouthOpenAmount) * 0.4;
+
+        this.animateMouth(this.mouthOpenAmount);
+    }
+
+    animateMouth(intensity) {
+        if (!this.model) return;
+
+        // Method 1: Jaw Bone Rotation
+        if (this.jawBone) {
+            // Rotate X usually
+            // Adjust axis if needed
+            this.jawBone.rotation.x = (this.originalJawRotation ? this.originalJawRotation.x : 0) + (intensity * 0.2);
+        }
+
+        // Method 2: Morph Targets (Generic)
+        this.morphMeshes.forEach(mesh => {
+            if (mesh.morphTargetInfluences) {
+                // Try to set ALL morphs that look like 'mouth' or just the first few
+                // A lot of models have 'mouthOpen' as index 0 or 1
+                for (let i = 0; i < Math.min(mesh.morphTargetInfluences.length, 4); i++) {
+                    mesh.morphTargetInfluences[i] = intensity;
                 }
-            });
-        }
+            }
+        });
 
-        // Increase bloom
-        if (this.bloomPass) {
-            this.bloomPass.strength = 1.2;
+        // Method 3: Scale Mouth Mesh (Fallback)
+        if (this.mouthMesh && !this.jawBone && this.morphMeshes.length === 0) {
+            this.mouthMesh.scale.y = 0.1 + (intensity * 0.8);
         }
-
-        console.log("Hologram: FULL MODE ACTIVATED");
     }
 }
-
-// Export for module use
-if (typeof window !== 'undefined') {
-    window.HologramUnit = HologramUnit;
-}
-
