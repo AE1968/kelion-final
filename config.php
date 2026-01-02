@@ -25,12 +25,13 @@ return [
     'voices' => ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'],
     // Optional mapping (heuristic). User can override in UI.
     'voice_by_lang' => [
-      'English' => 'cedar',
-      'Romanian' => 'marin',
-      'Spanish' => 'coral',
-      'French' => 'nova',
+      'English' => 'onyx',
+      'Romanian' => 'onyx', // Deep male voice
+      'Spanish' => 'echo',
+      'French' => 'alloy',
       'German' => 'onyx',
-      'Italian' => 'shimmer',
+      'Italian' => 'echo',
+      'Russian' => 'onyx',
     ],
   ],
 

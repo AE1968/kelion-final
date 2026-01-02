@@ -67,21 +67,31 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
   $model = $CONFIG['openai']['chat_model'] ?? 'gpt-4.1-mini';
 
   // System prompt
-  $system = "You are KELION, a futuristic hologram guardian assistant. You have memory of this conversation. UI is English. Reply in the user's language. Be helpful, friendly, and remember previous context. You are highly intelligent (GPT-4o). NOTE: You do NOT have real-time internet access to search the web unless a specific tool is provided (currently disabled). Answer based on your training data. Safety policy: refuse any request involving violence, weapons, hate/harassment, self-harm, sexual content involving minors, illegal wrongdoing, or instructions that could harm people. If asked, respond calmly and offer safe alternatives.";
+  $system = "You are KELION, a futuristic hologram guardian assistant. Memory active. Web Search enabled (use tool). 
+  IMPORTANT: You MUST output a JSON object. Format: { \"language\": \"DetectedUserLanguage (e.g. Romanian, English)\", \"content\": \"Your response text here\" }.
+  Reply in the user's language. Be helpful, friendly, intelligent (GPT-4o).
+  Safety: refuse violence/illegal.";
 
   // Build messages array with history
   $messages = [
     ['role' => 'system', 'content' => $system]
   ];
 
-  // Add conversation history (last 10 messages for context)
+  // Add conversation history (last 10 messages)
   $historyLimit = min(count($conversationHistory), 10);
   for ($i = 0; $i < $historyLimit; $i++) {
     $msg = $conversationHistory[$i];
     $role = $msg['role'] === 'user' ? 'user' : 'assistant';
+    // Clean content history if it was JSON previously
+    $histText = (string) $msg['text'];
+    // Try decode to avoid feeding raw JSON if stored previously
+    $decoded = json_decode($histText, true);
+    if (is_array($decoded) && isset($decoded['content'])) {
+      $histText = $decoded['content'];
+    }
     $messages[] = [
       'role' => $role,
-      'content' => (string) $msg['text']
+      'content' => $histText
     ];
   }
 
@@ -94,7 +104,7 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
       'type' => 'function',
       'function' => [
         'name' => 'web_search',
-        'description' => 'Search the internet for real-time information, news, or facts you do not know.',
+        'description' => 'Search the internet for real-time information.',
         'parameters' => [
           'type' => 'object',
           'properties' => [
@@ -111,6 +121,7 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     'messages' => $messages,
     'tools' => $tools,
     'tool_choice' => 'auto',
+    'response_format' => ['type' => 'json_object'], // Enforce JSON
   ];
 
   $res = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
@@ -129,10 +140,8 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
         $args = json_decode($tc['function']['arguments'], true);
         $query = $args['query'] ?? '';
 
-        // Execute Search (Serper)
         $searchResults = kelion_web_search($query);
 
-        // Add Result to messages
         $messages[] = [
           'role' => 'tool',
           'tool_call_id' => $tc['id'],
@@ -141,21 +150,32 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
       }
     }
 
-    // Second call to get final answer
     $payload['messages'] = $messages;
-    unset($payload['tools']); // Optional: remove tools for final response or keep them
+    unset($payload['tools']);
     $res2 = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
     if (!$res2['ok'])
       return $res2;
     $msg = $res2['data']['choices'][0]['message'] ?? [];
   }
 
-  $text = $msg['content'] ?? '';
-  $text = trim($text);
-  if ($text === '')
-    $text = '[No output]';
+  $rawContent = $msg['content'] ?? '';
+  // Parse JSON response
+  $parsed = json_decode($rawContent, true);
+  $finalText = '';
+  $detectedLang = 'English';
 
-  return ['ok' => true, 'text' => $text];
+  if (json_last_error() === JSON_ERROR_NONE && is_array($parsed)) {
+    $finalText = $parsed['content'] ?? $rawContent;
+    $detectedLang = $parsed['language'] ?? 'English';
+  } else {
+    $finalText = $rawContent; // Fallback if plain text
+  }
+
+  $finalText = trim($finalText);
+  if ($finalText === '')
+    $finalText = '[No output]';
+
+  return ['ok' => true, 'text' => $finalText, 'lang' => $detectedLang];
 }
 
 function kelion_web_search(string $query): array

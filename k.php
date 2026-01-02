@@ -1014,14 +1014,17 @@ function render_app(): void
         return; 
       }
       addMsg("assistant", j.answer);
-      await tts(j.answer);
+      await tts(j.answer, j.auto_voice);
     }
 
-    async function tts(text){
+    async function tts(text, overrideVoice){
       const fd = new FormData();
       fd.append("csrf", csrf);
       fd.append("text", text);
-      fd.append("voice", voiceSel.value);
+      const v = overrideVoice || voiceSel.value;
+      fd.append("voice", v);
+      // Update UI selector too if changed
+      if(overrideVoice && voiceSel.value !== overrideVoice) voiceSel.value = overrideVoice;
 
       const r = await fetch("k.php?r=api_tts", { method:"POST", body: fd });
       if(!r.ok){
@@ -1538,12 +1541,26 @@ if ($r === 'api_ask' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   $text = $ans['text'];
-  $stmt = $db->prepare("INSERT INTO conversation_messages(conversation_id,role,text,lang) VALUES(:c,'assistant',:t,'AUTO')");
+  $detectedLang = $ans['lang'] ?? 'English';
+
+  // Auto-select voice based on language
+  $voiceMap = $CONFIG['openai']['voice_by_lang'] ?? [];
+  // Fuzzy match or exact match
+  $autoVoice = $voiceMap['English'] ?? 'onyx'; // Fallback
+  foreach ($voiceMap as $l => $v) {
+    if (stripos($detectedLang, $l) !== false) {
+      $autoVoice = $v;
+      break;
+    }
+  }
+
+  $stmt = $db->prepare("INSERT INTO conversation_messages(conversation_id,role,text,lang) VALUES(:c,'assistant',:t,:l)");
   $stmt->bindValue(':c', $cid, SQLITE3_INTEGER);
   $stmt->bindValue(':t', $text, SQLITE3_TEXT);
+  $stmt->bindValue(':l', $detectedLang, SQLITE3_TEXT);
   $stmt->execute();
 
-  json_out(['ok' => true, 'answer' => $text]);
+  json_out(['ok' => true, 'answer' => $text, 'lang' => $detectedLang, 'auto_voice' => $autoVoice]);
 }
 
 if ($r === 'api_tts' && $_SERVER['REQUEST_METHOD'] === 'POST') {
