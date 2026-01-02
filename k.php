@@ -109,9 +109,9 @@ function render_forgot(?string $err = null, ?string $msg = null): void
 
 function render_reset(?string $err = null): void
 {
-  $email = (string)($_GET['email'] ?? '');
-  $token = (string)($_GET['token'] ?? '');
-  
+  $email = (string) ($_GET['email'] ?? '');
+  $token = (string) ($_GET['token'] ?? '');
+
   page_header('Reset Password');
   echo '<div class="wrap"><div class="card" style="max-width:520px;margin:0 auto">';
   echo '<h2>Reset Password</h2><p class="mut">Enter your new password.</p>';
@@ -1053,7 +1053,7 @@ function render_app(): void
     async function startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
         audioChunks = [];
         
         mediaRecorder.ondataavailable = (e) => {
@@ -1062,7 +1062,7 @@ function render_app(): void
         
         mediaRecorder.onstop = async () => {
           stream.getTracks().forEach(t => t.stop());
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           
           // Send to OpenAI STT API
           btnDictate.textContent = "🔄 Processing...";
@@ -1098,7 +1098,7 @@ function render_app(): void
         
         // Auto-stop after 5 seconds
         setTimeout(() => {
-          if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+          if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
             stopRecording();
           }
         }, 5000);
@@ -1112,7 +1112,7 @@ function render_app(): void
     }
     
     function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
         isRecording = false;
       }
@@ -1679,29 +1679,29 @@ if ($r === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($r === 'register_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   // Rate limit registration
   global $CONFIG;
-  $limit = (int)($CONFIG['security']['rate_limit']['register_per_ip_per_10min'] ?? 10);
+  $limit = (int) ($CONFIG['security']['rate_limit']['register_per_ip_per_10min'] ?? 10);
   if (!rate_limit_hit('register:' . ip_hash(), $limit, 600)) {
     render_register('Too many registration attempts. Try again later.');
     exit;
   }
-  
+
   csrf_check();
-  $username = trim((string)($_POST['username'] ?? ''));
-  $email = trim((string)($_POST['email'] ?? ''));
-  $password = (string)($_POST['password'] ?? '');
-  $password2 = (string)($_POST['password2'] ?? '');
-  
+  $username = trim((string) ($_POST['username'] ?? ''));
+  $email = trim((string) ($_POST['email'] ?? ''));
+  $password = (string) ($_POST['password'] ?? '');
+  $password2 = (string) ($_POST['password2'] ?? '');
+
   if ($password !== $password2) {
     render_register('Passwords do not match.');
     exit;
   }
-  
+
   $result = user_register($username, $email, $password);
   if (!$result['ok']) {
     render_register($result['error']);
     exit;
   }
-  
+
   // Send verification email if SMTP is enabled
   $smtpEnabled = $CONFIG['mail']['smtp']['enabled'] ?? false;
   if ($smtpEnabled && function_exists('send_mail')) {
@@ -1710,7 +1710,7 @@ if ($r === 'register_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $body = "Hello $username,\n\nPlease verify your email by clicking:\n$verifyUrl\n\nWelcome to KELION AI!";
     send_mail($email, $subject, $body);
   }
-  
+
   render_login(null, 'Account created! You can now log in.');
   exit;
 }
@@ -1718,15 +1718,15 @@ if ($r === 'register_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Forgot Password Request
 if ($r === 'forgot_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_check();
-  $email = trim((string)($_POST['email'] ?? ''));
-  
+  $email = trim((string) ($_POST['email'] ?? ''));
+
   if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     render_forgot('Please enter a valid email address.');
     exit;
   }
-  
+
   $result = password_reset_create($email);
-  
+
   // Always show success message (don't reveal if email exists)
   if ($result['ok']) {
     global $CONFIG;
@@ -1737,12 +1737,12 @@ if ($r === 'forgot_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
       $body = "Hello,\n\nClick to reset your password:\n$resetUrl\n\nThis link expires in 1 hour.\n\nIf you didn't request this, ignore this email.";
       send_mail($email, $subject, $body);
     }
-    
+
     // Log the reset token for testing (when SMTP is disabled)
     $logFile = __DIR__ . '/storage/password_reset_log.txt';
     @file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] Reset for $email - Token: " . ($result['token'] ?? 'N/A') . "\n", FILE_APPEND | LOCK_EX);
   }
-  
+
   render_forgot(null, 'If an account exists with that email, you will receive a reset link.');
   exit;
 }
@@ -1750,34 +1750,34 @@ if ($r === 'forgot_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Password Reset Completion
 if ($r === 'reset_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_check();
-  $email = trim((string)($_POST['email'] ?? ''));
-  $token = trim((string)($_POST['token'] ?? ''));
-  $password = (string)($_POST['password'] ?? '');
-  $password2 = (string)($_POST['password2'] ?? '');
-  
+  $email = trim((string) ($_POST['email'] ?? ''));
+  $token = trim((string) ($_POST['token'] ?? ''));
+  $password = (string) ($_POST['password'] ?? '');
+  $password2 = (string) ($_POST['password2'] ?? '');
+
   if ($password !== $password2) {
     render_reset('Passwords do not match.');
     exit;
   }
-  
+
   if (strlen($password) < 6) {
     render_reset('Password must be at least 6 characters.');
     exit;
   }
-  
+
   $result = password_reset_complete($email, $token, $password);
   if (!$result['ok']) {
     render_reset($result['error']);
     exit;
   }
-  
+
   render_login(null, 'Password reset successful! You can now log in.');
   exit;
 }
 
 // Email Verification
 if ($r === 'verify') {
-  $token = trim((string)($_GET['token'] ?? ''));
+  $token = trim((string) ($_GET['token'] ?? ''));
   if ($token !== '' && email_verify($token)) {
     render_login(null, 'Email verified! You can now log in.');
   } else {
