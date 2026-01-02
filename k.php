@@ -170,10 +170,19 @@ function render_home(): void
       :root {
         --cyan: #00f3ff;
         --pink: #ff00ff;
-        --bg: #050505;
+        --bg: #050510;
         --panel: rgba(0, 15, 30, 0.95);
         --border: rgba(0, 243, 255, 0.35);
         --glow: 0 0 20px rgba(0, 243, 255, 0.25);
+        --neon-blue: #00f3ff;
+      }
+
+      body.system-panic {
+        --cyan: #ff0000 !important;
+        --pink: #ff3300 !important;
+        --border: rgba(255, 0, 0, 0.8) !important;
+        --glow: 0 0 40px rgba(255, 0, 0, 0.6) !important;
+        --neon-blue: #ff0000 !important;
       }
 
       * {
@@ -622,10 +631,47 @@ function render_home(): void
           transform: translateX(-100%);
         }
       }
+
+      /* Watchdog Alert Box */
+      #watchdog-alert {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10000;
+        background: rgba(150, 0, 0, 0.9);
+        color: white;
+        padding: 5px 20px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 14px;
+        border: 2px solid #ff0000;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        display: none;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+      }
+
+      body.system-panic #watchdog-alert {
+        display: block;
+        animation: alertBlink 0.5s infinite;
+      }
+
+      @keyframes alertBlink {
+
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.5;
+        }
+      }
     </style>
   </head>
 
   <body>
+    <div id="watchdog-alert">SYSTEM REMNANT DETECTED</div>
 
     <!-- Welcome Overlay with Auto-Enter -->
     <div id="welcomeOverlay">

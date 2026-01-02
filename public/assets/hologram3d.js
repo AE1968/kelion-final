@@ -77,17 +77,51 @@ class HologramUnit {
             const currentGeoms = info.memory.geometries;
 
             // Detection Logic for 'Remnants'
-            if (currentGeoms > 50) { // Arbitrary limit for this model
-                console.warn(`Watchdog ALERT: High resource count detected (${currentGeoms} geometries). Potential Leak!`);
+            if (currentGeoms > 150) {
+                console.warn(`Watchdog ALERT: Remnants detected (${currentGeoms} geometries). BRANCH RED.`);
+                this.triggerPanic("REMNANTS DETECTED");
+            } else if (this.isPanic && currentGeoms <= 150) {
+                this.resolvePanic();
             }
 
             if (this.audioCtx && this.audioCtx.state === 'closed') {
                 console.error("Watchdog ALERT: Audio Context is DEAD.");
+                this.triggerPanic("AUDIO FAILURE");
             }
 
             // Keep audit
             this.resourceAudit.geometries = currentGeoms;
         }, 5000); // 5s check
+    }
+
+    triggerPanic(reason) {
+        if (this.isPanic) return;
+        this.isPanic = true;
+        document.body.classList.add('system-panic');
+
+        const alertBox = document.getElementById('watchdog-alert');
+        if (alertBox) {
+            alertBox.innerText = `CRITICAL: ${reason}`;
+        }
+
+        // Change Hologram Lights to RED
+        if (this.frontLight) this.frontLight.color.setHex(0xff0000);
+        if (this.fillLight) this.fillLight.color.setHex(0xaa0000);
+        if (this.rimLight) this.rimLight.color.setHex(0xff3300);
+
+        console.error(`!!! SYSTEM PANIC: ${reason} !!!`);
+    }
+
+    resolvePanic() {
+        this.isPanic = false;
+        document.body.classList.remove('system-panic');
+
+        // Restore cyan lights
+        if (this.frontLight) this.frontLight.color.setHex(0x00ffff);
+        if (this.fillLight) this.fillLight.color.setHex(0x00ccff);
+        if (this.rimLight) this.rimLight.color.setHex(0xff00ff);
+
+        console.log("System Status: Normal. Branch Restored.");
     }
 
     init() {
