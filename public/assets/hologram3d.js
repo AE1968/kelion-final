@@ -60,68 +60,7 @@ class HologramUnit {
         this.voiceIntensity = 0;
         this.peakIntensity = 0;
 
-        // Watchdog & Health Check
-        this.watchdogId = null;
-        this.resourceAudit = { textures: 0, geometries: 0 };
-
         this.init();
-        this.startWatchdog();
-    }
-
-    startWatchdog() {
-        console.log("Watchdog: System Monitoring ACTIVE.");
-        this.watchdogId = setInterval(() => {
-            if (!this.renderer || !this.scene) return;
-
-            const info = this.renderer.info;
-            const currentGeoms = info.memory.geometries;
-
-            // Detection Logic for 'Remnants'
-            if (currentGeoms > 150) {
-                console.warn(`Watchdog ALERT: Remnants detected (${currentGeoms} geometries). BRANCH RED.`);
-                this.triggerPanic("REMNANTS DETECTED");
-            } else if (this.isPanic && currentGeoms <= 150) {
-                this.resolvePanic();
-            }
-
-            if (this.audioCtx && this.audioCtx.state === 'closed') {
-                console.error("Watchdog ALERT: Audio Context is DEAD.");
-                this.triggerPanic("AUDIO FAILURE");
-            }
-
-            // Keep audit
-            this.resourceAudit.geometries = currentGeoms;
-        }, 5000); // 5s check
-    }
-
-    triggerPanic(reason) {
-        if (this.isPanic) return;
-        this.isPanic = true;
-        document.body.classList.add('system-panic');
-
-        const alertBox = document.getElementById('watchdog-alert');
-        if (alertBox) {
-            alertBox.innerText = `CRITICAL: ${reason}`;
-        }
-
-        // Change Hologram Lights to RED
-        if (this.frontLight) this.frontLight.color.setHex(0xff0000);
-        if (this.fillLight) this.fillLight.color.setHex(0xaa0000);
-        if (this.rimLight) this.rimLight.color.setHex(0xff3300);
-
-        console.error(`!!! SYSTEM PANIC: ${reason} !!!`);
-    }
-
-    resolvePanic() {
-        this.isPanic = false;
-        document.body.classList.remove('system-panic');
-
-        // Restore cyan lights
-        if (this.frontLight) this.frontLight.color.setHex(0x00ffff);
-        if (this.fillLight) this.fillLight.color.setHex(0x00ccff);
-        if (this.rimLight) this.rimLight.color.setHex(0xff00ff);
-
-        console.log("System Status: Normal. Branch Restored.");
     }
 
     init() {
@@ -209,14 +148,14 @@ class HologramUnit {
             this.setupModel(gltf);
         }, (xhr) => {
             // Progress
+            // if(this.onProgress) this.onProgress((xhr.loaded / xhr.total) * 100);
         }, (e) => {
             console.error("Hologram: Error loading GLB:", e);
-            // FAILSAFE: Try root path /hologram.glb
+            // Retry with alternate path if first fails
+            console.log("Hologram: Retrying with alternate path /hologram.glb ...");
             loader.load('/hologram.glb', (gltf) => this.setupModel(gltf), undefined, () => {
                 console.warn("GLB failed loading from both paths. Fallback to procedural.");
                 this.createProceduralHead();
-                this.isLoaded = true; // Still mark as loaded so routines can run
-                if (this.onReady) this.onReady();
             });
         });
     }
@@ -258,9 +197,7 @@ class HologramUnit {
 
         // Try playing 'Idle' or first animation
         this.playAnim('Idle');
-        this.isLoaded = true;
-        if (this.onReady) this.onReady();
-        console.log("Hologram Brain: ACTIVE. isLoaded = true");
+        console.log("Hologram Brain: ACTIVE.");
     }
 
     findMouthComponents() {
@@ -443,7 +380,7 @@ class HologramUnit {
     }
 
     animate() {
-        this.animationFrameId = requestAnimationFrame(() => this.animate());
+        requestAnimationFrame(() => this.animate());
         this.update(this.clock.getDelta());
     }
 
@@ -586,16 +523,12 @@ class HologramUnit {
 
         // Method 1: Jaw Bone Rotation
         if (this.jawBone) {
-            // Rotate X usually
-            // Adjust axis if needed
             this.jawBone.rotation.x = (this.originalJawRotation ? this.originalJawRotation.x : 0) + (intensity * 0.2);
         }
 
         // Method 2: Morph Targets (Generic)
         this.morphMeshes.forEach(mesh => {
             if (mesh.morphTargetInfluences) {
-                // Try to set ALL morphs that look like 'mouth' or just the first few
-                // A lot of models have 'mouthOpen' as index 0 or 1
                 for (let i = 0; i < Math.min(mesh.morphTargetInfluences.length, 4); i++) {
                     mesh.morphTargetInfluences[i] = intensity;
                 }
@@ -606,48 +539,146 @@ class HologramUnit {
         if (this.mouthMesh && !this.jawBone && this.morphMeshes.length === 0) {
             this.mouthMesh.scale.y = 0.1 + (intensity * 0.8);
         }
-    // === CLEANUP & GARBAGE COLLECTION ===
+    }
+
+    // === LIFECYCLE & CLEANUP ===
+    
     dispose() {
-        console.log("Hologram: Running Code Cleanup Protocol...");
-        
-        // 0. Kill Watchdog
+        console.log("Hologram: Disposing resources...");
+        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
         if (this.watchdogId) clearInterval(this.watchdogId);
-        
-        // 1. Stop Loop
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
 
-        // 2. Clear Scene & Resources
-        if (this.scene) {
-            this.scene.traverse(object => {
-                if (object.isMesh) {
-                    if (object.geometry) object.geometry.dispose();
-                    if (object.material) {
-                        if (Array.isArray(object.material)) {
-                            object.material.forEach(m => m.dispose());
-                        } else {
-                            object.material.dispose();
-                        }
-                    }
+        this.scene.traverse(node => {
+            if (node.isMesh) {
+                node.geometry.dispose();
+                if (Array.isArray(node.material)) {
+                    node.material.forEach(mat => mat.dispose());
+                } else {
+                    node.material.dispose();
                 }
-            });
-        }
+            }
+        });
 
-        // 3. Kill Renderer
         if (this.renderer) {
             this.renderer.dispose();
-            if (this.container && this.renderer.domElement) {
-                this.container.removeChild(this.renderer.domElement);
-            }
+            this.renderer.renderLists.dispose();
         }
 
-        // 4. Kill Audio
         if (this.audioCtx) {
             this.audioCtx.close();
-            this.audioCtx = null;
         }
 
-        console.log("Hologram: Systems Purged. Memory Clean.");
+        if (this.container && this.renderer.domElement) {
+            this.container.removeChild(this.renderer.domElement);
+        }
+    }
+
+    // === WATCHDOG & HEALTH ===
+
+    startWatchdog() {
+        console.log("Watchdog: Monitor ACTIVE.");
+        this.watchdogId = setInterval(() => {
+            let remnants = 0;
+            this.scene.traverse(n => { if (n.isMesh) remnants++; });
+
+            if (remnants > 200) {
+                this.triggerPanic(`EXCESSIVE_REMNANTS: ${ remnants } meshes detected.`);
+            }
+
+            if (this.audioCtx && this.audioCtx.state === 'closed') {
+                this.triggerPanic("AUDIO_CONTEXT_LOST: Core audio connection closed.");
+            }
+        }, 5000);
+    }
+
+    triggerPanic(reason) {
+        console.error("!!! SYSTEM PANIC !!!", reason);
+        document.body.classList.add('system-panic');
+        const alertBox = document.getElementById('watchdog-alert');
+        if (alertBox) {
+            alertBox.textContent = "CRITICAL: " + reason;
+            alertBox.style.display = 'block';
+        }
+        this.baseEmissive = 3.0;
+        this.frontLight.color.set(0xff0000);
+    }
+
+    resolvePanic() {
+        document.body.classList.remove('system-panic');
+        const alertBox = document.getElementById('watchdog-alert');
+        if (alertBox) alertBox.style.display = 'none';
+        this.baseEmissive = 1.0;
+        this.frontLight.color.set(0x00ffff);
+    }
+
+    // === PUBLIC API & ROUTINES ===
+
+    activateFullMode() {
+        this.state = 'idle';
+        this.playAnim('Idle');
+        this.baseEmissive = 1.2;
+    }
+
+    intensify(level = 2.0) {
+        this.baseEmissive = level;
+    }
+
+    calm() {
+        this.state = 'idle';
+        this.baseEmissive = 0.8;
+    }
+
+    speak(text) {
+        this.state = 'speaking';
+        this.playAnim('Speak');
+    }
+
+    say(text, emotion = 'normal') {
+        if (!("speechSynthesis" in window)) return;
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = (emotion === 'energetic') ? 1.0 : (emotion === 'calm' ? 0.8 : 0.9);
+        u.pitch = (emotion === 'calm') ? 0.7 : 0.85;
+
+        u.onstart = () => {
+            this.speak(text); 
+            if (emotion === 'energetic') this.intensify(2.5);
+            else if (emotion === 'calm') this.intensify(0.6);
+            else this.intensify(1.5);
+        };
+
+        u.onend = () => {
+            this.calm();
+            if (this.onSpeechEnd) this.onSpeechEnd();
+        };
+        window.speechSynthesis.speak(u);
+    }
+
+    routineMorning() {
+        this.say("Good morning. Systems are awakening. Energy levels at maximum. Ready for terminal access.", "energetic");
+    }
+
+    routineNoon() {
+        this.say("Good afternoon. All neural nodes are synchronized. Processing capacity optimized.", "normal");
+    }
+
+    routineEvening() {
+        this.say("Good evening. Transitioning to high-efficiency night cycle. Standing by for commands.", "calm");
+    }
+
+    routineGreet() {
+        const h = new Date().getHours();
+        if (h >= 5 && h < 12) this.routineMorning();
+        else if (h >= 12 && h < 18) this.routineNoon();
+        else this.routineEvening();
+    }
+
+    enableAudioInteraction() {
+        const unlock = async () => {
+             if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                 await this.audioCtx.resume();
+             }
+        };
+        document.addEventListener('click', unlock, {once: true});
+        document.addEventListener('touchstart', unlock, {once: true});
     }
 }

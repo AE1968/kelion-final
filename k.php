@@ -135,7 +135,7 @@ function render_reset(?string $err = null): void
 function render_home(): void
 {
   global $CONFIG;
-  $version = explode(' ', $CONFIG['app']['version'] ?? 'v1.0.7')[0];
+  $version = $CONFIG['app']['version'] ?? 'v1.0.2';
   $u = current_user();
   $username = $u ? h($u['username']) : 'OFFLINE';
   $cloudStatus = $u ? 'CONNECTED' : 'DISCONNECTED';
@@ -642,7 +642,7 @@ function render_home(): void
       <div id="status-display">
         <div class="status-row top">
           <span
-            style="color:var(--cyan); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--cyan)">v1.0.7</span>
+            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?></span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
@@ -747,7 +747,27 @@ function render_home(): void
       updateClock();
       setInterval(updateClock, 1000);
 
+      // Welcome message
+      function speakWelcome() {
+        if (!("speechSynthesis" in window)) return;
+        const hour = new Date().getHours();
+        let greeting = "Good morning";
+        if (hour >= 12 && hour < 18) greeting = "Good afternoon";
+        else if (hour >= 18 && hour < 22) greeting = "Good evening";
+        else if (hour >= 22 || hour < 5) greeting = "Good night";
 
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(greeting + ". Welcome to KELION AI.");
+        u.lang = "en-GB";
+        u.rate = 0.9;
+        u.pitch = 0.8;
+
+        if (window.hologram) {
+          u.onstart = () => window.hologram.speak();
+          u.onend = () => window.hologram.calm();
+        }
+        speechSynthesis.speak(u);
+      }
 
       // User login state from PHP
       const isLoggedIn = <?= $u ? 'true' : 'false' ?>;
@@ -764,18 +784,27 @@ function render_home(): void
 
             // Wait for 'onReady' callback from Hologram (Sync fix)
             window.hologram.onReady = () => {
-              // Activate internal systems
-              window.hologram.enableAudioInteraction();
-              window.hologram.activateFullMode();
+               // Activate internal systems
+               window.hologram.enableAudioInteraction();
+               window.hologram.activateFullMode();
+               window.hologram.startWatchdog();
 
-              // Execute Greeting Routine (Time-Aware)
-              setTimeout(() => {
-                window.hologram.routineGreet();
-              }, 500);
+               // Handle redirect AFTER greeting sequence ends
+               window.hologram.onSpeechEnd = () => {
+                   console.log("Greeting sequence finished. Preparing for authentication...");
+                   setTimeout(() => {
+                        if (!isLoggedIn) {
+                            window.location.href = 'k.php?r=login';
+                        }
+                   }, 2000);
+               };
+
+               // Execute Greeting Routine (Time-Aware: Morning, Noon, or Evening)
+               setTimeout(() => {
+                 window.hologram.routineGreet();
+               }, 500);
             };
           }
-          // Play welcome after a brief delay
-
         }, 1000);
       }, 2500);
     </script>
