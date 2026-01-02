@@ -1,0 +1,14 @@
+<h1>Debug Page</h1><pre>DB Path: /var/www/html/storage/kelion.sqlite
+
+--- Checking tables ---
+Tables in DB:
+
+--- Testing plans table creation ---
+Plans table error: default value of column [created_at] is not constant
+
+--- Testing prepare statement ---
+Prepare/Insert error: Unable to prepare statement: 1, no such table: plans
+
+--- Counting plans ---
+Count error: Unable to prepare statement: 1, no such table: plans
+</pre>

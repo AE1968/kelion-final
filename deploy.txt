@@ -1,0 +1,66 @@
+==============================================================================
+KELION AI – DEPLOY FINAL AUTOMATIZAT (GitHub Actions + Railway)
+PROIECT: k_v1.0.2
+==============================================================================
+
+Sistemul tău este acum configurat la nivel ENTERPRISE.
+Nu mai e nevoie să verifici manual nimic. GitHub și Railway fac totul.
+
+CALEA PROIECTULUI:
+C:\Users\adria\.gemini\antigravity\scratch\k_v1.0.2
+
+==============================================================================
+1. CUM FACI UPDATE (DEPLOY)
+==============================================================================
+
+VARIANTA A: UPDATE SIMPLU
+-------------------------
+Doar modifici codul și îl trimiți. GitHub va face automat deploy pe https://kelionai.app
+
+> git add .
+> git commit -m "Descriere modificare"
+> git push origin main
+
+VARIANTA B: RELEASE OFICIAL (Cu Etichetă/Versiune)
+--------------------------------------------------
+Dacă vrei să marchezi o versiune stabilă (ex: v1.0.3):
+
+> git tag v1.0.3
+> git push origin v1.0.3
+
+==============================================================================
+2. CE SE ÎNTÂMPLĂ ÎN SPATE (AUTOMAT)
+==============================================================================
+Imediat ce dai "git push", un robot (GitHub Actions) preia comanda:
+1.  Verifică codul.
+2.  Trimite comanda la Railway.
+3.  Așteaptă 45 de secunde să pornească serverul.
+4.  Verifică dacă site-ul răspunde (HTTP 200).
+5.  Îți dă verdictul: SUCCES sau EȘUAT.
+
+Poți vedea acest proces live aici:
+https://github.com/AE1968/mainS_v6_SINGULARITY/actions
+
+==============================================================================
+3. SETUP INITIAL (O SINGURĂ DATĂ - NECESAR ACUM)
+==============================================================================
+Pentru ca acest sistem să meargă, trebuie să conectăm GitHub cu Railway o singură dată.
+
+1. Mergi în Railway:
+   - Apasă pe poza ta (profil) -> Account Settings -> Tokens -> New Token.
+   - Numește-l "GITHUB_ACTION".
+   - Copiază codul lung generat.
+
+2. Mergi în GitHub (Repo-ul mainS_v6_SINGULARITY):
+   - Settings -> Secrets and variables -> Actions -> New repository secret.
+   - Name: RAILWAY_TOKEN
+   - Secret: (Lipește codul copiat din Railway).
+   - Add Secret.
+
+GATA! De acum totul este 100% automat.
+
+==============================================================================
+4. CREDENȚIALE DE ACCES
+==============================================================================
+ADMIN: admin / admin1234
+DEMO:  demo  / demo

@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home - KELION AI</title><link rel="stylesheet" href="https://kelionai.app/public/assets/style.css"></head><body><div class="hud"><div class="hudLeft"><div class="hudTitle">KELION AI</div><div class="hudMeta">v1.0.2 • <span id="hudDate"></span></div></div><div class="hudClock"><div class="clockFace"><span id="hudTime"></span></div></div></div><header class="topbar"><div class="brand">KELION<span>AI</span></div><div class="who">Guest</div></header><script>
+  (function(){
+    function pad(n){ return String(n).padStart(2,"0"); }
+    function tick(){
+      const d = new Date();
+      const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const t = pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+      const date = days[d.getDay()]+" "+pad(d.getDate())+" "+months[d.getMonth()]+" "+d.getFullYear();
+      const elT=document.getElementById("hudTime"); if(elT) elT.textContent=t;
+      const elD=document.getElementById("hudDate"); if(elD) elD.textContent=date;
+    }
+    tick(); setInterval(tick, 250);
+  })();
+  </script><div id="welcomeOverlay" style="
+    position:fixed; inset:0; z-index:9999;
+    background: radial-gradient(ellipse at center, rgba(0,20,40,0.97) 0%, rgba(0,0,0,0.99) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; transition: opacity 0.5s ease;
+  ">
+    <div style="font-size:120px; margin-bottom:20px; text-shadow: 0 0 60px rgba(0,255,255,0.8), 0 0 120px rgba(0,255,255,0.4);">K</div>
+    <h1 style="color:#0ff; font-size:42px; margin:0 0 10px 0; text-shadow: 0 0 30px rgba(0,255,255,0.6);">KELION AI</h1>
+    <p style="color:rgba(255,255,255,0.7); font-size:18px; margin:0 0 40px 0;">Futuristic Hologram Platform</p>
+    <div style="
+      padding: 16px 48px; 
+      border: 2px solid rgba(0,255,255,0.6); 
+      border-radius: 30px;
+      color: #0ff;
+      font-size: 18px;
+      animation: pulse 2s infinite;
+    ">▶ CLICK TO ENTER</div>
+    <style>
+      @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 20px rgba(0,255,255,0.3); }
+        50% { box-shadow: 0 0 40px rgba(0,255,255,0.6), 0 0 60px rgba(0,255,255,0.3); }
+      }
+    </style>
+  </div><div class="wrap"><div class="grid"><div class="card"><h2>Future Hologram Interface</h2><div class="mut">Voice welcome plays after entering. Login to unlock the full app.</div><canvas class="canvas" id="holo"></canvas><div class="row" style="margin-top:12px"><a class="btn btn2" href="k.php?r=login" style="text-align:center">Login</a><button class="btn" id="btnWelcome">Speak Welcome (EN)</button><button class="btn btnBad" id="btnStop">Stop</button></div><div class="mut" style="margin-top:10px">Add your OpenAI key in <code>config.php</code> to enable AI voice.</div></div><div class="card"><h2>Status</h2><div class="mut">Not logged in.</div><hr style="border:0;border-top:1px solid rgba(255,255,255,.10);margin:14px 0"><div class="mut"><b>Accounts:</b> demo/demo or admin/admin1234.</div></div></div></div><script type="module">
+    import { initHologram } from "https://kelionai.app/public/assets/hologram.js";
+    const c = document.getElementById("holo");
+    initHologram(c);
+
+    function speakWelcome(){
+      if(!("speechSynthesis" in window)) return console.warn("SpeechSynthesis not supported");
+      window.HOLOGRAM.state="speaking"; window.HOLOGRAM.emotion="active"; window.HOLOGRAM.focus=0.2;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("Welcome to KELION AI. Please log in to continue.");
+      u.lang="en-GB";
+      u.onend=()=>{ window.HOLOGRAM.state="idle"; window.HOLOGRAM.emotion="calm"; window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.focus=0; };
+      speechSynthesis.speak(u);
+    }
+    
+    document.getElementById("btnWelcome").onclick = speakWelcome;
+    document.getElementById("btnStop").onclick = ()=>{ speechSynthesis.cancel(); window.HOLOGRAM.state="idle"; window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.focus=0; };
+    
+    // Welcome overlay handler - enables audio on click
+    const overlay = document.getElementById("welcomeOverlay");
+    if (overlay) {
+      overlay.addEventListener("click", function() {
+        overlay.style.opacity = "0";
+        setTimeout(() => {
+          overlay.style.display = "none";
+          // Now play welcome message (audio enabled after user interaction)
+          speakWelcome();
+        }, 500);
+      });
+    }
+  </script><footer class="footer">KELION AI • Futuristic Hologram Platform • <a href="k.php?r=privacy">Privacy & GDPR</a> • <a href="k.php?r=terms">Terms</a> • <a href="k.php?r=safety">Safety</a></footer></body></html>

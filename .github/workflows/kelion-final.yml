@@ -1,0 +1,83 @@
+name: KELION AI – FINAL DEPLOY PIPELINE
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+env:
+  SITE_URL: https://kelionai.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ PRELUARE COD
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ EXTRAGERE VERSIUNE (din tag sau fallback)
+      - name: Detect version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+
+      # 3️⃣ DEPLOY REAL CĂTRE RAILWAY
+      - name: Deploy to Railway
+        uses: railwayapp/railway-action@v2
+        with:
+          railwayToken: ${{ secrets.RAILWAY_TOKEN }}
+          environment: production
+
+      # 4️⃣ AȘTEPTARE STABILIZARE CONTAINER
+      - name: Wait for Railway
+        run: sleep 45
+
+      # 5️⃣ HEALTH CHECK – SITE
+      - name: HTTP Health Check
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $SITE_URL)
+          echo "HTTP STATUS = $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ DEPLOY FAILED – SITE NOT RESPONDING"
+            exit 1
+          fi
+          echo "✅ SITE ONLINE"
+
+      # 6️⃣ HEALTH CHECK – CONȚINUT
+      - name: Content sanity check
+        run: |
+          BODY=$(curl -s $SITE_URL)
+          if [[ ${#BODY} -lt 50 ]]; then
+            echo "❌ SITE RESPONDS BUT CONTENT IS INVALID"
+            exit 1
+          fi
+          echo "✅ CONTENT OK"
+
+      # 7️⃣ VERIFICARE VERSIUNE (DACĂ ESTE AFIȘATĂ)
+      - name: Version verification (optional)
+        run: |
+          if curl -s $SITE_URL | grep -q "${{ steps.version.outputs.version }}"; then
+            echo "✅ VERSION CONFIRMED LIVE"
+          else
+            echo "⚠️ VERSION NOT FOUND (not blocking deploy)"
+          fi
+
+      # 8️⃣ FINAL STATUS
+      - name: Final result
+        run: |
+          echo "======================================="
+          echo "🚀 KELION AI DEPLOY COMPLETED"
+          echo "VERSION: ${{ steps.version.outputs.version }}"
+          echo "URL: $SITE_URL"
+          echo "STATUS: SUCCESS"
+          echo "======================================="

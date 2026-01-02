@@ -1,33 +1,39 @@
 <?php
-function csrf_token(): string {
+function csrf_token(): string
+{
   global $CONFIG;
   $k = $CONFIG['security']['csrf_key'];
-  if (empty($_SESSION[$k])) $_SESSION[$k] = bin2hex(random_bytes(16));
+  if (empty($_SESSION[$k]))
+    $_SESSION[$k] = bin2hex(random_bytes(16));
   return $_SESSION[$k];
 }
-function csrf_check(): void {
+function csrf_check(): void
+{
   global $CONFIG;
   $k = $CONFIG['security']['csrf_key'];
-  $t = (string)($_POST['csrf'] ?? '');
+  $t = (string) ($_POST['csrf'] ?? '');
   if (!$t || !hash_equals($_SESSION[$k] ?? '', $t)) {
     http_response_code(400);
     exit("CSRF invalid.");
   }
 }
-function ip_hash(): string {
+function ip_hash(): string
+{
   $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-  return hash('sha256', $ip.'|kelion');
+  return hash('sha256', $ip . '|kelion');
 }
-function ua_hash(): string {
+function ua_hash(): string
+{
   $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-  return hash('sha256', $ua.'|kelion');
+  return hash('sha256', $ua . '|kelion');
 }
-function traffic_log(string $event, ?string $path=null): void {
+function traffic_log(string $event, ?string $path = null): void
+{
   $db = db();
   $uid = $_SESSION['uid'] ?? null;
   $sid = session_id();
   $stmt = $db->prepare("INSERT INTO traffic_events(user_id,session_id,event_type,path,ip_hash,ua_hash) VALUES(:u,:s,:e,:p,:ip,:ua)");
-  $stmt->bindValue(':u', $uid, $uid===null?SQLITE3_NULL:SQLITE3_INTEGER);
+  $stmt->bindValue(':u', $uid, $uid === null ? SQLITE3_NULL : SQLITE3_INTEGER);
   $stmt->bindValue(':s', $sid, SQLITE3_TEXT);
   $stmt->bindValue(':e', $event, SQLITE3_TEXT);
   $stmt->bindValue(':p', $path ?? ($_SERVER['REQUEST_URI'] ?? ''), SQLITE3_TEXT);
@@ -37,7 +43,8 @@ function traffic_log(string $event, ?string $path=null): void {
 }
 
 
-function security_headers(): void {
+function security_headers(): void
+{
   // Basic hardening. Adjust CSP when you add external CDNs.
   $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
   header("X-Content-Type-Options: nosniff");
@@ -48,34 +55,37 @@ function security_headers(): void {
   header("Cross-Origin-Resource-Policy: same-origin");
   header("Cross-Origin-Embedder-Policy: unsafe-none");
 
-  // CSP: allow self + inline scripts/styles (we use inline for HUD clock). Tighten later.
-  header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'");
+  // CSP: allow self + inline scripts/styles + CDNs for Three.js and Google Fonts
+  header("Content-Security-Policy: default-src 'self'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; base-uri 'self'; frame-ancestors 'none'");
 
-  if ($isHttps) header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+  if ($isHttps)
+    header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
 }
 
-function rate_limit_hit(string $key, int $limit, int $windowSec): bool {
+function rate_limit_hit(string $key, int $limit, int $windowSec): bool
+{
   // Returns true if allowed, false if blocked
   $db = db();
   $now = time();
   $db->exec('CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL)');
   $stmt = $db->prepare("SELECT count, reset_at FROM rate_limits WHERE key=:k");
-  $stmt->bindValue(':k',$key,SQLITE3_TEXT);
+  $stmt->bindValue(':k', $key, SQLITE3_TEXT);
   $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
 
-  if (!$row || (int)$row['reset_at'] <= $now) {
+  if (!$row || (int) $row['reset_at'] <= $now) {
     $stmt2 = $db->prepare("INSERT OR REPLACE INTO rate_limits(key,count,reset_at) VALUES(:k,1,:r)");
-    $stmt2->bindValue(':k',$key,SQLITE3_TEXT);
-    $stmt2->bindValue(':r',$now+$windowSec,SQLITE3_INTEGER);
+    $stmt2->bindValue(':k', $key, SQLITE3_TEXT);
+    $stmt2->bindValue(':r', $now + $windowSec, SQLITE3_INTEGER);
     $stmt2->execute();
     return true;
   }
 
-  $count = (int)$row['count'];
-  if ($count >= $limit) return false;
+  $count = (int) $row['count'];
+  if ($count >= $limit)
+    return false;
 
   $stmt3 = $db->prepare("UPDATE rate_limits SET count=count+1 WHERE key=:k");
-  $stmt3->bindValue(':k',$key,SQLITE3_TEXT);
+  $stmt3->bindValue(':k', $key, SQLITE3_TEXT);
   $stmt3->execute();
   return true;
 }

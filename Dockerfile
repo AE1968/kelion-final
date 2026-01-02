@@ -1,30 +1,30 @@
-FROM php:8.2-apache
+FROM php:8.2-cli
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
-
-# Install SQLite extension
-RUN apt-get update && apt-get install -y libsqlite3-dev \
+# Install dependencies (SQLite3, extensions, unzip for Composer if needed)
+RUN apt-get update && apt-get install -y \
+    libsqlite3-dev \
+    sqlite3 \
     && docker-php-ext-install pdo pdo_sqlite \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy all project files
+# Copy application files
 COPY . .
 
-# Create storage directory with proper permissions
+# Ensure storage directory exists and has permissions
 RUN mkdir -p storage && chmod -R 777 storage
 
-# Configure Apache to allow .htaccess
-RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+# Handle 404s by routing everything to known files, or use a router script
+# For PHP built-in server, if a file exists it is served. If not, we can route to index.php
+# But first, let's keep it simple.
 
-# Set document root permissions
-RUN chown -R www-data:www-data /var/www/html
+# Expose port 8080 (internal container port)
+EXPOSE 8080
 
-# Expose port (Railway uses PORT env variable)
-EXPOSE 80
-
-# Start Apache
-CMD ["apache2-foreground"]
+# Start PHP server
+# -S 0.0.0.0:8080 : Listen on all interfaces, port 8080
+# -t /var/www/html : Document root
+# index.php : Router script (if using one, otherwise requests simply hit files)
+CMD php -S 0.0.0.0:8080 -t /var/www/html
