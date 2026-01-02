@@ -4,6 +4,7 @@ function openai_key(): string
   global $CONFIG;
   return (string) ($CONFIG['openai']['api_key'] ?? '');
 }
+
 function openai_post_json(string $url, array $payload): array
 {
   $key = openai_key();
@@ -38,9 +39,7 @@ function openai_post_json(string $url, array $payload): array
 
 function kelion_safety_block(string $text): ?string
 {
-  // Non-aggression / safety gate (lightweight). Expand as needed.
   $patterns = [
-    // Explicit sexual content (adult porn)
     '/\b(porn|pornography|xxx|sex video|nude pics?|send nudes?)\b/i',
     '/\b(explicit sex|hardcore|blowjob|anal sex|cumshot)\b/i',
     '/\b(make|build|create)\b.*\b(bomb|explosive|molotov)\b/i',
@@ -51,7 +50,7 @@ function kelion_safety_block(string $text): ?string
   ];
   foreach ($patterns as $p) {
     if (preg_match($p, $text)) {
-      return "I can’t help with violence, self-harm, hate, or illegal wrongdoing. If you’re in danger or thinking about harming yourself, please contact local emergency services or a crisis hotline immediately.";
+      return "I can’t help with violence, self-harm, hate, or illegal wrongdoing.";
     }
   }
   return null;
@@ -64,38 +63,32 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     return ['ok' => true, 'text' => $block];
 
   global $CONFIG;
-  $model = $CONFIG['openai']['chat_model'] ?? 'gpt-4.1-mini';
+  $model = $CONFIG['openai']['chat_model'] ?? 'gpt-4o';
 
   // System prompt
-  $system = "You are KELION, a futuristic hologram guardian assistant. Memory active. Web Search enabled (use tool). 
+  $system = "You are KELION, a futuristic hologram guardian assistant. Memory active. Web Search & Email tools enabled. 
   IMPORTANT: You MUST output a JSON object. Format: { \"language\": \"DetectedUserLanguage (e.g. Romanian, English)\", \"content\": \"Your response text here\" }.
   Reply in the user's language. Be helpful, friendly, intelligent (GPT-4o).
-  Safety: refuse violence/illegal.";
+  If asked to check email, use check_email tool. If asked to send email, use send_email tool.";
 
-  // Build messages array with history
+  // Build messages array
   $messages = [
     ['role' => 'system', 'content' => $system]
   ];
 
-  // Add conversation history (last 10 messages)
+  // History with JSON cleanup
   $historyLimit = min(count($conversationHistory), 10);
   for ($i = 0; $i < $historyLimit; $i++) {
     $msg = $conversationHistory[$i];
     $role = $msg['role'] === 'user' ? 'user' : 'assistant';
-    // Clean content history if it was JSON previously
     $histText = (string) $msg['text'];
-    // Try decode to avoid feeding raw JSON if stored previously
     $decoded = json_decode($histText, true);
     if (is_array($decoded) && isset($decoded['content'])) {
       $histText = $decoded['content'];
     }
-    $messages[] = [
-      'role' => $role,
-      'content' => $histText
-    ];
+    $messages[] = ['role' => $role, 'content' => $histText];
   }
 
-  // Add current user message
   $messages[] = ['role' => 'user', 'content' => $userText];
 
   // Define Tools
@@ -107,10 +100,35 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
         'description' => 'Search the internet for real-time information.',
         'parameters' => [
           'type' => 'object',
-          'properties' => [
-            'query' => ['type' => 'string', 'description' => 'The search query'],
-          ],
+          'properties' => ['query' => ['type' => 'string']],
           'required' => ['query'],
+        ],
+      ],
+    ],
+    [
+      'type' => 'function',
+      'function' => [
+        'name' => 'check_email',
+        'description' => 'Check recent emails in the inbox (read last 5).',
+        'parameters' => [
+          'type' => 'object',
+          'properties' => ['limit' => ['type' => 'integer', 'description' => 'Default 5']],
+        ],
+      ],
+    ],
+    [
+      'type' => 'function',
+      'function' => [
+        'name' => 'send_email',
+        'description' => 'Send an email to a recipient.',
+        'parameters' => [
+          'type' => 'object',
+          'properties' => [
+            'to' => ['type' => 'string'],
+            'subject' => ['type' => 'string'],
+            'body' => ['type' => 'string'],
+          ],
+          'required' => ['to', 'subject', 'body'],
         ],
       ],
     ]
@@ -121,37 +139,47 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     'messages' => $messages,
     'tools' => $tools,
     'tool_choice' => 'auto',
-    'response_format' => ['type' => 'json_object'], // Enforce JSON
+    'response_format' => ['type' => 'json_object'],
   ];
 
   $res = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
   if (!$res['ok'])
     return $res;
 
-  $data = $res['data'];
-  $msg = $data['choices'][0]['message'] ?? [];
+  $msg = $res['data']['choices'][0]['message'] ?? [];
 
-  // Handle Tool Calls (Search)
+  // Handle Tool Calls
   if (!empty($msg['tool_calls'])) {
-    $messages[] = $msg; // Add assistant's tool call request to history
+    $messages[] = $msg;
+
+    // Include mailer if needed
+    if (file_exists(__DIR__ . '/mailer_ai.php')) {
+      require_once __DIR__ . '/mailer_ai.php';
+    }
 
     foreach ($msg['tool_calls'] as $tc) {
-      if ($tc['function']['name'] === 'web_search') {
-        $args = json_decode($tc['function']['arguments'], true);
-        $query = $args['query'] ?? '';
+      $args = json_decode($tc['function']['arguments'], true);
+      $resContent = '';
+      $n = $tc['function']['name'];
 
-        $searchResults = kelion_web_search($query);
-
-        $messages[] = [
-          'role' => 'tool',
-          'tool_call_id' => $tc['id'],
-          'content' => json_encode($searchResults)
-        ];
+      if ($n === 'web_search') {
+        $resContent = json_encode(kelion_web_search($args['query'] ?? ''));
+      } elseif ($n === 'check_email') {
+        $limit = $args['limit'] ?? 5;
+        $resContent = json_encode(function_exists('ai_check_email') ? ai_check_email($limit) : ['error' => 'Email module missing']);
+      } elseif ($n === 'send_email') {
+        $resContent = json_encode(function_exists('ai_send_email') ? ai_send_email($args['to'] ?? '', $args['subject'] ?? '', $args['body'] ?? '') : ['error' => 'Email module missing']);
       }
+
+      $messages[] = [
+        'role' => 'tool',
+        'tool_call_id' => $tc['id'],
+        'content' => $resContent
+      ];
     }
 
     $payload['messages'] = $messages;
-    unset($payload['tools']);
+    unset($payload['tools']); // Final answer without tools
     $res2 = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
     if (!$res2['ok'])
       return $res2;
@@ -159,7 +187,6 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
   }
 
   $rawContent = $msg['content'] ?? '';
-  // Parse JSON response
   $parsed = json_decode($rawContent, true);
   $finalText = '';
   $detectedLang = 'English';
@@ -168,7 +195,7 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     $finalText = $parsed['content'] ?? $rawContent;
     $detectedLang = $parsed['language'] ?? 'English';
   } else {
-    $finalText = $rawContent; // Fallback if plain text
+    $finalText = $rawContent;
   }
 
   $finalText = trim($finalText);
@@ -189,10 +216,7 @@ function kelion_web_search(string $query): array
   curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-      'X-API-KEY: ' . $key,
-      'Content-Type: application/json'
-    ],
+    CURLOPT_HTTPHEADER => ['X-API-KEY: ' . $key, 'Content-Type: application/json'],
     CURLOPT_POSTFIELDS => json_encode(['q' => $query, 'num' => 5]),
     CURLOPT_TIMEOUT => 10
   ]);
@@ -221,10 +245,10 @@ function openai_tts_mp3(string $text, ?string $voice = null, ?string $model = nu
   global $CONFIG;
   $key = openai_key();
   if ($key === '')
-    return ['ok' => false, 'error' => 'Missing OpenAI API key in config.php (openai.api_key).'];
+    return ['ok' => false, 'error' => 'Missing OpenAI Key'];
 
   $voice = $voice ?: ($CONFIG['openai']['voice_default'] ?? 'cedar');
-  $model = $model ?: ($CONFIG['openai']['tts_model'] ?? 'gpt-4o-mini-tts');
+  $model = 'tts-1';
 
   $payload = ['model' => $model, 'voice' => $voice, 'format' => 'mp3', 'input' => $text];
 
@@ -240,78 +264,40 @@ function openai_tts_mp3(string $text, ?string $voice = null, ?string $model = nu
     CURLOPT_TIMEOUT => 60,
   ]);
   $bin = curl_exec($ch);
-  $err = curl_error($ch);
-  $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
   curl_close($ch);
 
   if ($bin === false)
-    return ['ok' => false, 'error' => "cURL error: $err"];
-  if ($code < 200 || $code >= 300) {
-    $j = json_decode($bin, true);
-    $msg = $j['error']['message'] ?? ('HTTP ' . $code);
-    return ['ok' => false, 'error' => $msg];
-  }
+    return ['ok' => false, 'error' => 'cURL error'];
   return ['ok' => true, 'bin' => $bin];
 }
 
-/**
- * Speech-to-Text using OpenAI Audio API
- * @param string $audioData - Raw audio file data (mp3, wav, webm, etc.)
- * @param string $filename - Original filename with extension
- * @param string|null $language - Optional language hint (ISO 639-1)
- * @return array - ['ok'=>bool, 'text'=>string] or ['ok'=>false, 'error'=>string]
- */
 function openai_stt(string $audioData, string $filename = 'audio.webm', ?string $language = null): array
 {
   global $CONFIG;
   $key = openai_key();
-  if ($key === '')
-    return ['ok' => false, 'error' => 'Missing OpenAI API key in config.php (openai.api_key).'];
-
-  $model = $CONFIG['openai']['stt_model'] ?? 'gpt-4o-mini-transcribe';
-
-  // Create temp file for cURL upload
   $tmpFile = tempnam(sys_get_temp_dir(), 'stt_');
   file_put_contents($tmpFile, $audioData);
 
   $postFields = [
     'file' => new CURLFile($tmpFile, 'audio/webm', $filename),
-    'model' => $model,
+    'model' => 'whisper-1',
   ];
-
-  if ($language) {
+  if ($language)
     $postFields['language'] = $language;
-  }
 
   $ch = curl_init('https://api.openai.com/v1/audio/transcriptions');
   curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-      'Authorization: Bearer ' . $key,
-    ],
+    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $key],
     CURLOPT_POSTFIELDS => $postFields,
     CURLOPT_TIMEOUT => 60,
   ]);
 
   $out = curl_exec($ch);
-  $err = curl_error($ch);
-  $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
   curl_close($ch);
-
-  // Clean up temp file
   @unlink($tmpFile);
 
-  if ($out === false)
-    return ['ok' => false, 'error' => "cURL error: $err"];
-
   $json = json_decode($out, true);
-  if ($code < 200 || $code >= 300) {
-    $msg = $json['error']['message'] ?? ('HTTP ' . $code);
-    return ['ok' => false, 'error' => $msg];
-  }
-
-  $text = $json['text'] ?? '';
-  return ['ok' => true, 'text' => $text];
+  return ['ok' => true, 'text' => $json['text'] ?? ''];
 }
-

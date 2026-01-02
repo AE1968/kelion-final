@@ -52,6 +52,14 @@ return [
       'password' => base64_decode('QW5kcmFkYV8xOTY4IQ=='),
       'encryption' => 'ssl',
     ],
+    'imap' => [
+      'enabled' => true,
+      'host' => 'mail.privateemail.com',
+      'port' => 993,
+      'username' => 'contact@kelionai.app',
+      'password' => base64_decode('QW5kcmFkYV8xOTY4IQ=='),
+      'encryption' => 'ssl',
+    ],
   ],
 
   'sms' => [
