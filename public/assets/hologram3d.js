@@ -40,25 +40,10 @@ class HologramUnit {
         this.nextBlinkDelay = 3000;
         this.breathingPhase = 0;
 
-        // Audio & Lip Sync
+        // Audio
         this.analyser = null;
         this.dataArray = null;
         this.audioCtx = null;
-        this.audioSource = null;
-        this.currentAudioElement = null;
-
-        // Lip Sync state
-        this.lipSyncEnabled = true;
-        this.mouthOpenAmount = 0;
-        this.targetMouthOpen = 0;
-        this.smoothingFactor = 0.3;  // Smoothing for mouth movement
-        this.mouthMesh = null;
-        this.jawBone = null;
-        this.originalJawRotation = null;
-
-        // Voice intensity tracking
-        this.voiceIntensity = 0;
-        this.peakIntensity = 0;
 
         this.init();
     }
@@ -134,12 +119,25 @@ class HologramUnit {
 
         const loader = new THREE.GLTFLoader(manager);
 
-        // Try to load hologram.glb, fallback to generated head
-        loader.load('/hologram.glb', (gltf) => {
+        // Try to load hologram.glb (Softul Original)
+        // Trying explicit path relative to web root
+        const modelPath = 'public/hologram.glb';
+
+        console.log("Hologram: Loading model from", modelPath);
+        loader.load(modelPath, (gltf) => {
+            console.log("Hologram: Model loaded successfully!");
             this.setupModel(gltf);
-        }, undefined, (e) => {
-            console.warn("GLB not found, creating procedural head...");
-            this.createProceduralHead();
+        }, (xhr) => {
+            // Progress
+            if (this.onProgress) this.onProgress((xhr.loaded / xhr.total) * 100);
+        }, (e) => {
+            console.error("Hologram: Error loading GLB:", e);
+            // Retry with alternate path if first fails
+            console.log("Hologram: Retrying with alternate path...");
+            loader.load('/hologram.glb', (gltf) => this.setupModel(gltf), undefined, () => {
+                console.warn("GLB failed loading from both paths. Fallback to procedural.");
+                this.createProceduralHead();
+            });
         });
     }
 
@@ -263,11 +261,12 @@ class HologramUnit {
     update(delta) {
         if (this.mixer && this.mixer.update) this.mixer.update(delta);
 
-        // Update lip sync (analyzes audio and animates mouth)
-        this.updateLipSync(delta);
-
-        // Voice intensity calculation (now handled by updateLipSync)
-        let voiceInt = this.voiceIntensity || 0;
+        // Voice intensity calculation
+        let voiceInt = 0;
+        if (this.state === 'speaking') {
+            const t = Date.now() * 0.02;
+            voiceInt = (Math.sin(t) * 0.5 + 0.5) * (Math.random() * 0.5 + 0.5);
+        }
 
         if (this.autoActive) {
             // Breathing animation
@@ -359,11 +358,6 @@ class HologramUnit {
         this.baseEmissive = 2.0;
     }
 
-    // Alias for compatibility with k.php
-    speakWithAudio(audioElement) {
-        this.connectAudio(audioElement);
-    }
-
     // Activate eyes with intense glow (called on login)
     activateEyes() {
         if (!this.model) return;
@@ -413,306 +407,6 @@ class HologramUnit {
         }
 
         console.log("Hologram: FULL MODE ACTIVATED");
-    }
-
-    // === LIP SYNC SYSTEM ===
-
-    /**
-     * Connect an audio element for lip sync
-     * @param {HTMLAudioElement} audioElement - The audio element to analyze
-     */
-    connectAudio(audioElement) {
-        if (!audioElement) {
-            console.warn("LipSync: No audio element provided");
-            return;
-        }
-
-        try {
-            // Create Audio Context if not exists
-            if (!this.audioCtx) {
-                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-
-            // Resume context if suspended (browser autoplay policy)
-            if (this.audioCtx.state === 'suspended') {
-                this.audioCtx.resume();
-            }
-
-            // Disconnect previous source if exists
-            if (this.audioSource) {
-                try {
-                    this.audioSource.disconnect();
-                } catch (e) { }
-            }
-
-            // Create analyzer
-            this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 256;
-            this.analyser.smoothingTimeConstant = 0.8;
-
-            const bufferLength = this.analyser.frequencyBinCount;
-            this.dataArray = new Uint8Array(bufferLength);
-
-            // Connect audio source
-            this.audioSource = this.audioCtx.createMediaElementSource(audioElement);
-            this.audioSource.connect(this.analyser);
-            this.analyser.connect(this.audioCtx.destination);
-
-            this.currentAudioElement = audioElement;
-            this.state = 'speaking';
-
-            console.log("LipSync: Audio connected successfully");
-
-            // Find mouth/jaw mesh for animation
-            this.findMouthComponents();
-
-        } catch (error) {
-            console.error("LipSync: Error connecting audio:", error);
-            // Fallback to simple speaking mode without audio analysis
-            this.state = 'speaking';
-        }
-    }
-
-    /**
-     * Disconnect audio and stop lip sync
-     */
-    disconnectAudio() {
-        if (this.audioSource) {
-            try {
-                this.audioSource.disconnect();
-            } catch (e) { }
-            this.audioSource = null;
-        }
-
-        this.currentAudioElement = null;
-        this.analyser = null;
-        this.voiceIntensity = 0;
-        this.mouthOpenAmount = 0;
-        this.targetMouthOpen = 0;
-        this.state = 'idle';
-
-        // Reset mouth position
-        this.resetMouth();
-
-        console.log("LipSync: Audio disconnected");
-    }
-
-    /**
-     * Find mouth-related meshes and bones in the model
-     */
-    findMouthComponents() {
-        if (!this.model) return;
-
-        this.model.traverse(node => {
-            const name = node.name.toLowerCase();
-
-            // Look for jaw bone
-            if (name.includes('jaw') || name.includes('chin')) {
-                if (node.isBone || node.isObject3D) {
-                    this.jawBone = node;
-                    this.originalJawRotation = node.rotation.clone();
-                    console.log("LipSync: Found jaw bone:", node.name);
-                }
-            }
-
-            // Look for mouth mesh
-            if (name.includes('mouth') || name.includes('lip') || name.includes('teeth')) {
-                if (node.isMesh) {
-                    this.mouthMesh = node;
-                    console.log("LipSync: Found mouth mesh:", node.name);
-                }
-            }
-        });
-    }
-
-    /**
-     * Update lip sync - called every frame
-     * Analyzes audio and animates mouth accordingly
-     */
-    updateLipSync(delta) {
-        if (!this.lipSyncEnabled) return;
-
-        // Get audio intensity
-        if (this.analyser && this.dataArray && this.state === 'speaking') {
-            this.analyser.getByteFrequencyData(this.dataArray);
-
-            // Calculate average volume from frequency data (focus on voice frequencies)
-            let sum = 0;
-            const voiceRange = Math.floor(this.dataArray.length * 0.4); // Lower frequencies = voice
-            for (let i = 0; i < voiceRange; i++) {
-                sum += this.dataArray[i];
-            }
-            const average = sum / voiceRange;
-
-            // Normalize to 0-1 range
-            this.voiceIntensity = Math.min(average / 128, 1.0);
-            this.peakIntensity = Math.max(this.peakIntensity * 0.95, this.voiceIntensity);
-
-            // Set target mouth opening based on voice intensity
-            this.targetMouthOpen = this.voiceIntensity * 0.8 + (Math.random() * 0.1); // Add slight randomness
-
-        } else if (this.state === 'speaking') {
-            // Fallback: simulate lip movement without audio analysis
-            const t = Date.now() * 0.015;
-            this.targetMouthOpen = (Math.sin(t) * 0.5 + 0.5) * (Math.sin(t * 1.7) * 0.3 + 0.5) * 0.6;
-            this.voiceIntensity = this.targetMouthOpen;
-        } else {
-            this.targetMouthOpen = 0;
-            this.voiceIntensity *= 0.9; // Fade out
-        }
-
-        // Smooth mouth movement
-        this.mouthOpenAmount += (this.targetMouthOpen - this.mouthOpenAmount) * this.smoothingFactor;
-
-        // Apply mouth animation
-        this.animateMouth(this.mouthOpenAmount);
-
-        // Apply visual effects based on voice intensity
-        this.applyVoiceVisuals(this.voiceIntensity);
-    }
-
-    /**
-     * Animate mouth opening based on intensity (0-1)
-     */
-    animateMouth(intensity) {
-        if (!this.model) return;
-
-        // Method 1: Animate jaw bone if available
-        if (this.jawBone && this.originalJawRotation) {
-            const maxJawRotation = 0.15; // Max rotation in radians
-            this.jawBone.rotation.x = this.originalJawRotation.x + (intensity * maxJawRotation);
-        }
-
-        // Method 2: Use morph targets if available
-        this.morphMeshes.forEach(mesh => {
-            if (mesh.morphTargetInfluences && mesh.morphTargetDictionary) {
-                // Look for mouth-related morph targets
-                const morphNames = ['mouthOpen', 'jawOpen', 'viseme_aa', 'viseme_O', 'A', 'O', 'mouth'];
-
-                for (const name of morphNames) {
-                    const index = mesh.morphTargetDictionary[name];
-                    if (index !== undefined) {
-                        mesh.morphTargetInfluences[index] = intensity;
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Method 3: Scale/move mouth mesh if found
-        if (this.mouthMesh) {
-            const baseScale = 1.0;
-            const maxStretch = 0.3;
-            this.mouthMesh.scale.y = baseScale + (intensity * maxStretch);
-        }
-
-        // Method 4: Fallback - animate entire head subtly
-        if (!this.jawBone && !this.mouthMesh && this.morphMeshes.length === 0 && this.model) {
-            // Subtle head movement when speaking
-            const speakIntensity = intensity * 0.02;
-            this.model.position.y += Math.sin(Date.now() * 0.01) * speakIntensity * 0.5;
-        }
-    }
-
-    /**
-     * Apply visual effects during speech (glow, color changes)
-     */
-    applyVoiceVisuals(intensity) {
-        if (!this.model) return;
-
-        this.model.traverse(node => {
-            if (!node.isMesh || !node.material) return;
-
-            const name = node.name.toLowerCase();
-
-            // Mouth glow during speech
-            if (name.includes('mouth') || name.includes('lip')) {
-                node.material.emissiveIntensity = 0.3 + (intensity * 1.0);
-                node.material.emissive = new THREE.Color().lerpColors(
-                    new THREE.Color(0x200020),
-                    new THREE.Color(0xff0066),
-                    intensity
-                );
-            }
-
-            // Eye intensity increases slightly when speaking
-            if (name.includes('eye')) {
-                node.material.emissiveIntensity = 0.8 + (intensity * 0.5);
-            }
-
-            // Subtle skin glow
-            if (!name.includes('eye') && !name.includes('mouth')) {
-                node.material.emissiveIntensity = 0.3 + (intensity * 0.3);
-            }
-        });
-
-        // Adjust bloom intensity based on voice
-        if (this.bloomPass) {
-            this.bloomPass.strength = 0.8 + (intensity * 0.6);
-        }
-    }
-
-    /**
-     * Reset mouth to closed position
-     */
-    resetMouth() {
-        this.mouthOpenAmount = 0;
-        this.targetMouthOpen = 0;
-
-        if (this.jawBone && this.originalJawRotation) {
-            this.jawBone.rotation.copy(this.originalJawRotation);
-        }
-
-        this.morphMeshes.forEach(mesh => {
-            if (mesh.morphTargetInfluences) {
-                mesh.morphTargetInfluences.fill(0);
-            }
-        });
-
-        if (this.mouthMesh) {
-            this.mouthMesh.scale.y = 1.0;
-        }
-    }
-
-    /**
-     * Speak with audio - connects audio and starts lip sync
-     * @param {HTMLAudioElement} audioElement - Audio to sync with
-     */
-    speakWithAudio(audioElement) {
-        this.state = 'speaking';
-        this.baseEmissive = 1.5;
-        this.playAnim('Speak');
-
-        if (audioElement) {
-            this.connectAudio(audioElement);
-
-            // Auto-disconnect when audio ends
-            audioElement.addEventListener('ended', () => {
-                this.onSpeakEnd();
-            }, { once: true });
-
-            audioElement.addEventListener('pause', () => {
-                this.onSpeakEnd();
-            }, { once: true });
-        }
-
-        console.log("Hologram: Speaking with lip sync ACTIVE");
-    }
-
-    /**
-     * Called when speaking ends
-     */
-    onSpeakEnd() {
-        this.disconnectAudio();
-        this.calm();
-        console.log("Hologram: Speech ended, returning to idle");
-    }
-
-    /**
-     * Get current voice intensity (0-1) for external use
-     */
-    getVoiceIntensity() {
-        return this.voiceIntensity;
     }
 }
 
