@@ -16,7 +16,7 @@ return [
   ],
 
   'openai' => [
-    'api_key' => base64_decode('c2stcHJvai13MGl1M2pISERtdTRybDg2MVQxSlVueXppd2dweHRCS1lkZUhZTldzMmNEWUkxaWIyQmJtbFZsczF6QTJJOE1qVUJ6TnVmSjhNalQzQmxia0ZKM25McmZKTFA3TktMS0drZ0xMQW9KTXNFY0lGZzVWT21uSDhtZnlVWkIwMnlGdTAwWmlaajFFaHlzc2VPY0FYVExNS0VOOU1fTUE='),
+    'api_key' => base64_decode('c2stcHJvai1NTlhQT2FUSmpnYVYxeE1nRVZyTjBiV2lCTkEyYkZsQmpQR21PNDVTNEJkTGtQMjVUV2ZpQU5XRnRaM005REk3anR6RFZxYXFHZFQzQmxia0ZKUE1weFRDcnYzM1Nsb3E0TXhldmI5WWNFd1dKckZDY0JOdkdEWTVRV2MzUFNsRjYzazFoZEZKV2otWVFfd2dsZTZsRkFaNW4wa0E='),
     'chat_model' => 'gpt-4o', // Most intelligent model
     'tts_model' => 'tts-1',
     'stt_model' => 'whisper-1',
