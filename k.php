@@ -954,21 +954,27 @@ function render_app(): void
   echo '<script src="' . h(asset('public/assets/hologram3d.js')) . '"></script>';
 
   echo '<script>
-    // Initialize 3D Hologram
-    let hologram = null;
-    window.addEventListener("DOMContentLoaded", () => {
+    // Wait for everything to load
+    window.onload = function() {
+      console.log("KELION: Window loaded, initializing...");
+      
+      // Initialize 3D Hologram
+      let hologram = null;
       if (typeof HologramUnit !== "undefined") {
+        console.log("KELION: HologramUnit found, creating instance...");
         hologram = new HologramUnit("hologram-app");
         hologram.activateFullMode();
         window.hologram = hologram;
+        console.log("KELION: Hologram initialized successfully!");
+      } else {
+        console.error("KELION: HologramUnit not found!");
       }
-    });
 
-    const csrf = ' . json_encode(csrf_token()) . ';
-    const chat = document.getElementById("chat");
-    const q = document.getElementById("q");
-    const player = document.getElementById("player");
-    const voiceSel = document.getElementById("voice");
+      const csrf = ' . json_encode(csrf_token()) . ';
+      const chat = document.getElementById("chat");
+      const q = document.getElementById("q");
+      const player = document.getElementById("player");
+      const voiceSel = document.getElementById("voice");
 
     async function setVoice(v){
       const fd = new FormData();
@@ -1177,6 +1183,7 @@ function render_app(): void
     q.addEventListener("keydown",(e)=>{
       if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); ask(); }
     });
+    }; // End of window.onload
   </script>';
 
   page_footer();
