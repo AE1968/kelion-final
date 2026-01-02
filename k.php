@@ -1037,10 +1037,18 @@ function render_app(): void
       const url = URL.createObjectURL(blob);
       player.src = url;
 
-      // Connect window.hologram lip sync to audio
-      player.onplay = () => {
-        if(window.hologram) window.hologram.speakWithAudio(player);
-      };
+      // Connect window.hologram lip sync to audio IMMEDIATELY (Before Play)
+      if(window.hologram) {
+         // Ensure AudioContext is ready/resumed
+         if(window.hologram.audioCtx && window.hologram.audioCtx.state === 'suspended') {
+             window.hologram.audioCtx.resume().then(() => {
+                 console.log("AudioContext resumed for playback");
+             });
+         }
+         // Connect the stream now
+         window.hologram.connectAudio(player);
+      }
+
       player.onended = () => {
         if(window.hologram) window.hologram.calm();
       };
