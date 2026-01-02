@@ -359,6 +359,11 @@ class HologramUnit {
         this.baseEmissive = 2.0;
     }
 
+    // Alias for compatibility with k.php
+    speakWithAudio(audioElement) {
+        this.connectAudio(audioElement);
+    }
+
     // Activate eyes with intense glow (called on login)
     activateEyes() {
         if (!this.model) return;
