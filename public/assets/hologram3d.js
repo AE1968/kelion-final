@@ -60,7 +60,34 @@ class HologramUnit {
         this.voiceIntensity = 0;
         this.peakIntensity = 0;
 
+        // Watchdog & Health Check
+        this.watchdogId = null;
+        this.resourceAudit = { textures: 0, geometries: 0 };
+
         this.init();
+        this.startWatchdog();
+    }
+
+    startWatchdog() {
+        console.log("Watchdog: System Monitoring ACTIVE.");
+        this.watchdogId = setInterval(() => {
+            if (!this.renderer || !this.scene) return;
+
+            const info = this.renderer.info;
+            const currentGeoms = info.memory.geometries;
+
+            // Detection Logic for 'Remnants'
+            if (currentGeoms > 50) { // Arbitrary limit for this model
+                console.warn(`Watchdog ALERT: High resource count detected (${currentGeoms} geometries). Potential Leak!`);
+            }
+
+            if (this.audioCtx && this.audioCtx.state === 'closed') {
+                console.error("Watchdog ALERT: Audio Context is DEAD.");
+            }
+
+            // Keep audit
+            this.resourceAudit.geometries = currentGeoms;
+        }, 5000); // 5s check
     }
 
     init() {
@@ -546,6 +573,9 @@ class HologramUnit {
     // === CLEANUP & GARBAGE COLLECTION ===
     dispose() {
         console.log("Hologram: Running Code Cleanup Protocol...");
+        
+        // 0. Kill Watchdog
+        if (this.watchdogId) clearInterval(this.watchdogId);
         
         // 1. Stop Loop
         if (this.animationFrameId) {
