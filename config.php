@@ -34,6 +34,12 @@ return [
     ],
   ],
 
+  'search' => [
+    'enabled' => true,
+    'provider' => 'serper', // serper.dev
+    'api_key' => getenv('SERPER_API_KEY') ?: '',
+  ],
+
   'mail' => [
     'from' => 'contact@kelionai.app',
     'smtp' => [

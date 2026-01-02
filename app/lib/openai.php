@@ -88,9 +88,29 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
   // Add current user message
   $messages[] = ['role' => 'user', 'content' => $userText];
 
+  // Define Tools
+  $tools = [
+    [
+      'type' => 'function',
+      'function' => [
+        'name' => 'web_search',
+        'description' => 'Search the internet for real-time information, news, or facts you do not know.',
+        'parameters' => [
+          'type' => 'object',
+          'properties' => [
+            'query' => ['type' => 'string', 'description' => 'The search query'],
+          ],
+          'required' => ['query'],
+        ],
+      ],
+    ]
+  ];
+
   $payload = [
     'model' => $model,
     'messages' => $messages,
+    'tools' => $tools,
+    'tool_choice' => 'auto',
   ];
 
   $res = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
@@ -98,12 +118,82 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     return $res;
 
   $data = $res['data'];
-  $text = $data['choices'][0]['message']['content'] ?? '';
+  $msg = $data['choices'][0]['message'] ?? [];
 
+  // Handle Tool Calls (Search)
+  if (!empty($msg['tool_calls'])) {
+    $messages[] = $msg; // Add assistant's tool call request to history
+
+    foreach ($msg['tool_calls'] as $tc) {
+      if ($tc['function']['name'] === 'web_search') {
+        $args = json_decode($tc['function']['arguments'], true);
+        $query = $args['query'] ?? '';
+
+        // Execute Search (Serper)
+        $searchResults = kelion_web_search($query);
+
+        // Add Result to messages
+        $messages[] = [
+          'role' => 'tool',
+          'tool_call_id' => $tc['id'],
+          'content' => json_encode($searchResults)
+        ];
+      }
+    }
+
+    // Second call to get final answer
+    $payload['messages'] = $messages;
+    unset($payload['tools']); // Optional: remove tools for final response or keep them
+    $res2 = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
+    if (!$res2['ok'])
+      return $res2;
+    $msg = $res2['data']['choices'][0]['message'] ?? [];
+  }
+
+  $text = $msg['content'] ?? '';
   $text = trim($text);
   if ($text === '')
     $text = '[No output]';
+
   return ['ok' => true, 'text' => $text];
+}
+
+function kelion_web_search(string $query): array
+{
+  global $CONFIG;
+  $key = $CONFIG['search']['api_key'] ?? '';
+  if (!$key)
+    return ['error' => 'Search API key not configured.'];
+
+  $ch = curl_init('https://google.serper.dev/search');
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+      'X-API-KEY: ' . $key,
+      'Content-Type: application/json'
+    ],
+    CURLOPT_POSTFIELDS => json_encode(['q' => $query, 'num' => 5]),
+    CURLOPT_TIMEOUT => 10
+  ]);
+  $out = curl_exec($ch);
+  curl_close($ch);
+
+  if (!$out)
+    return ['error' => 'Search failed'];
+  $j = json_decode($out, true);
+
+  $results = [];
+  if (!empty($j['organic'])) {
+    foreach ($j['organic'] as $r) {
+      $results[] = [
+        'title' => $r['title'] ?? '',
+        'link' => $r['link'] ?? '',
+        'snippet' => $r['snippet'] ?? ''
+      ];
+    }
+  }
+  return $results;
 }
 
 function openai_tts_mp3(string $text, ?string $voice = null, ?string $model = null): array
