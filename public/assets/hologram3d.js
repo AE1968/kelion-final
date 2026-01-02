@@ -380,7 +380,7 @@ class HologramUnit {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
         this.update(this.clock.getDelta());
     }
 
@@ -543,5 +543,45 @@ class HologramUnit {
         if (this.mouthMesh && !this.jawBone && this.morphMeshes.length === 0) {
             this.mouthMesh.scale.y = 0.1 + (intensity * 0.8);
         }
+    // === CLEANUP & GARBAGE COLLECTION ===
+    dispose() {
+        console.log("Hologram: Running Code Cleanup Protocol...");
+        
+        // 1. Stop Loop
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+
+        // 2. Clear Scene & Resources
+        if (this.scene) {
+            this.scene.traverse(object => {
+                if (object.isMesh) {
+                    if (object.geometry) object.geometry.dispose();
+                    if (object.material) {
+                        if (Array.isArray(object.material)) {
+                            object.material.forEach(m => m.dispose());
+                        } else {
+                            object.material.dispose();
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Kill Renderer
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.container && this.renderer.domElement) {
+                this.container.removeChild(this.renderer.domElement);
+            }
+        }
+
+        // 4. Kill Audio
+        if (this.audioCtx) {
+            this.audioCtx.close();
+            this.audioCtx = null;
+        }
+
+        console.log("Hologram: Systems Purged. Memory Clean.");
     }
 }
