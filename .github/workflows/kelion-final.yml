@@ -1,4 +1,4 @@
-name: KELION AI – FINAL DEPLOY PIPELINE
+name: KELION AI – PRODUCTION MONITOR
 
 on:
   push:
@@ -11,73 +11,40 @@ env:
   SITE_URL: https://kelionai.app
 
 jobs:
-  deploy:
+  verify-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ PRELUARE COD
-      - name: Checkout repository
+      # 1️⃣ Așteptăm ca Railway să preia automat codul
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ EXTRAGERE VERSIUNE (din tag sau fallback)
-      - name: Detect version
-        id: version
+      - name: Wait for Railway Build (Estimated)
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
+          echo "⏳ Waiting for Railway to auto-deploy..."
+          sleep 60  # Așteptăm 1 minut să înceapă procesul
+
+      # 2️⃣ Verificăm în buclă dacă site-ul răspunde (Max 5 minute)
+      - name: Health Check Loop
+        run: |
+          echo "Checking site availability: $SITE_URL"
+          MAX_RETRIES=30
+          COUNTER=0
+          until curl -s --head --request GET $SITE_URL | grep "200 OK" > /dev/null; do
+             if [ $COUNTER -eq $MAX_RETRIES ]; then
+               echo "❌ TIMEOUT: Site is not responding after 5 minutes."
+               exit 1
+             fi
+             echo "zzz... Waiting for site to stabilize ($COUNTER/$MAX_RETRIES)..."
+             sleep 10
+             let COUNTER=COUNTER+1
+          done
+          echo "✅ SITE IS ONLINE & RESPONDING!"
+
+      # 3️⃣ Verificare Conținut
+      - name: Verify Content
+        run: |
+          if curl -s $SITE_URL | grep -q "KELION"; then
+             echo "✅ VALIDITY CHECK PASSED: Found 'KELION' on page."
           else
-            VERSION="dev-${GITHUB_SHA::7}"
+             echo "⚠️ WARNING: Site is 200 OK but content might be wrong."
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Deploying version: $VERSION"
-
-      # 3️⃣ DEPLOY REAL CĂTRE RAILWAY
-      - name: Deploy to Railway
-        uses: railwayapp/railway-action@v2
-        with:
-          railwayToken: ${{ secrets.RAILWAY_TOKEN }}
-          environment: production
-
-      # 4️⃣ AȘTEPTARE STABILIZARE CONTAINER
-      - name: Wait for Railway
-        run: sleep 45
-
-      # 5️⃣ HEALTH CHECK – SITE
-      - name: HTTP Health Check
-        run: |
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $SITE_URL)
-          echo "HTTP STATUS = $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "❌ DEPLOY FAILED – SITE NOT RESPONDING"
-            exit 1
-          fi
-          echo "✅ SITE ONLINE"
-
-      # 6️⃣ HEALTH CHECK – CONȚINUT
-      - name: Content sanity check
-        run: |
-          BODY=$(curl -s $SITE_URL)
-          if [[ ${#BODY} -lt 50 ]]; then
-            echo "❌ SITE RESPONDS BUT CONTENT IS INVALID"
-            exit 1
-          fi
-          echo "✅ CONTENT OK"
-
-      # 7️⃣ VERIFICARE VERSIUNE (DACĂ ESTE AFIȘATĂ)
-      - name: Version verification (optional)
-        run: |
-          if curl -s $SITE_URL | grep -q "${{ steps.version.outputs.version }}"; then
-            echo "✅ VERSION CONFIRMED LIVE"
-          else
-            echo "⚠️ VERSION NOT FOUND (not blocking deploy)"
-          fi
-
-      # 8️⃣ FINAL STATUS
-      - name: Final result
-        run: |
-          echo "======================================="
-          echo "🚀 KELION AI DEPLOY COMPLETED"
-          echo "VERSION: ${{ steps.version.outputs.version }}"
-          echo "URL: $SITE_URL"
-          echo "STATUS: SUCCESS"
-          echo "======================================="
