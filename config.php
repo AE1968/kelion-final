@@ -45,12 +45,12 @@ return [
   'mail' => [
     'from' => 'contact@kelionai.app',
     'smtp' => [
-      'enabled' => false,
-      'host' => '',
-      'port' => 587,
-      'username' => '',
-      'password' => '',
-      'encryption' => 'tls',
+      'enabled' => true,
+      'host' => 'smtp.privateemail.com',
+      'port' => 465,
+      'username' => 'contact@kelionai.app',
+      'password' => base64_decode('QW5kcmFkYV8xOTY4IQ=='),
+      'encryption' => 'ssl',
     ],
   ],
 
