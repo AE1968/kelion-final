@@ -814,7 +814,7 @@ function render_home(): void
             }, 2000); // Wait for GLB to load
           }
           // Play welcome after a brief delay
-          setTimeout(speakWelcome, 500);
+
         }, 1000);
       }, 2500);
     </script>
