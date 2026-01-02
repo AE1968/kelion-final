@@ -1,4 +1,4 @@
-name: KELION AI – AUTO LINK & DEPLOY
+name: KELION AI – ULTIMATE AUTO DEPLOY
 
 on:
   push:
@@ -12,32 +12,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
+      - name: Install Tools
+        run: |
+          npm i -g @railway/cli
+          sudo apt-get install jq -y
 
-      - name: Auto-Link & Deploy
+      - name: Auto-Discovery & Deploy
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo "🔍 Autentificare..."
-          # Listăm proiectele
-          PROJECTS=$(railway list --json)
-          echo "Proiecte gasite: $PROJECTS"
+          echo "🔍 Searching for Railway Project..."
           
-          # Luam primul ID de proiect gasit (Presupunand ca ai unul singur relevant sau cel mai recent)
-          # Deoarece nu stim ID-ul, incercam sa facem deploy direct daca Railway detecteaza contextul, sau ne legam de primul.
+          # Query GraphQL to get Project ID
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"query": "query { me { projects { edges { node { id name } } } } }"}' \
+            https://backboard.railway.app/graphql/v2)
+
+          echo "Response: $RESPONSE"
+
+          # Extract first Project ID using jq
+          PROJECT_ID=$(echo $RESPONSE | jq -r '.data.me.projects.edges[0].node.id')
+          PROJECT_NAME=$(echo $RESPONSE | jq -r '.data.me.projects.edges[0].node.name')
+
+          if [ "$PROJECT_ID" == "null" ]; then
+            echo "❌ Fatal: Could not find any project associated with this Token."
+            exit 1
+          fi
+
+          echo "✅ FOUND PROJECT: $PROJECT_NAME (ID: $PROJECT_ID)"
           
-          # Incercam strategia 'link' automata
-          # Dacă avem un singur proiect, 'railway link' il poate ghici sau putem folosi ID-ul.
-          
-          # Strategie mai sigura: Cream un serviciu nou daca nu exista, sau facem update.
-          # Dar vrem sa actualizam 'kelionai.app'.
-          
-          echo "🚀 Pornire deploy..."
-          # Folosim comanda 'up' care caută automat un proiect legat sau cere unul.
-          # Cu token-ul setat, va incerca sa gaseasca match-ul.
-          
-          # Voi forța un deploy specificând numele serviciului dacă îl știu, sau lăsând automat.
-          # Voi incerca sa gasesc ID-ul proiectului 'Kelion' sau similar din lista
-          
-          railway up --service "KELION AI" --detach || railway up --detach
+          echo "🔗 Linking..."
+          railway link $PROJECT_ID
+
+          echo "🚀 DEPLOYING..."
+          railway up --detach
+
+      - name: Verify
+        run: |
+          sleep 60
+          curl -I https://kelionai.app
