@@ -67,11 +67,11 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
   $model = $CONFIG['openai']['chat_model'] ?? 'gpt-4.1-mini';
 
   // System prompt
-  $system = "You are KELION, a futuristic hologram guardian assistant. You have memory of this conversation. UI is English. Reply in the user's language. Be helpful, friendly, and remember previous context. Safety policy: refuse any request involving violence, weapons, hate/harassment, self-harm, sexual content involving minors, illegal wrongdoing, or instructions that could harm people. If asked, respond calmly and offer safe alternatives.";
+  $system = "You are KELION, a futuristic hologram guardian assistant. You have memory of this conversation. UI is English. Reply in the user's language. Be helpful, friendly, and remember previous context. You are highly intelligent (GPT-4o). NOTE: You do NOT have real-time internet access to search the web unless a specific tool is provided (currently disabled). Answer based on your training data. Safety policy: refuse any request involving violence, weapons, hate/harassment, self-harm, sexual content involving minors, illegal wrongdoing, or instructions that could harm people. If asked, respond calmly and offer safe alternatives.";
 
   // Build messages array with history
   $messages = [
-    ['role' => 'system', 'content' => [['type' => 'text', 'text' => $system]]]
+    ['role' => 'system', 'content' => $system]
   ];
 
   // Add conversation history (last 10 messages for context)
@@ -81,35 +81,25 @@ function openai_answer(string $userText, string $lang = 'AUTO', array $conversat
     $role = $msg['role'] === 'user' ? 'user' : 'assistant';
     $messages[] = [
       'role' => $role,
-      'content' => [['type' => 'text', 'text' => (string) $msg['text']]]
+      'content' => (string) $msg['text']
     ];
   }
 
   // Add current user message
-  $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userText]]];
+  $messages[] = ['role' => 'user', 'content' => $userText];
 
   $payload = [
     'model' => $model,
-    'input' => $messages,
+    'messages' => $messages,
   ];
-  $res = openai_post_json('https://api.openai.com/v1/responses', $payload);
+
+  $res = openai_post_json('https://api.openai.com/v1/chat/completions', $payload);
   if (!$res['ok'])
     return $res;
 
   $data = $res['data'];
-  $text = '';
-  if (!empty($data['output'])) {
-    foreach ($data['output'] as $out) {
-      if (($out['type'] ?? '') === 'message' && !empty($out['content'])) {
-        foreach ($out['content'] as $c) {
-          if (($c['type'] ?? '') === 'output_text')
-            $text .= $c['text'] ?? '';
-          if (($c['type'] ?? '') === 'text')
-            $text .= $c['text'] ?? '';
-        }
-      }
-    }
-  }
+  $text = $data['choices'][0]['message']['content'] ?? '';
+
   $text = trim($text);
   if ($text === '')
     $text = '[No output]';

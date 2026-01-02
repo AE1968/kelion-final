@@ -17,9 +17,9 @@ return [
 
   'openai' => [
     'api_key' => getenv('OPENAI_API_KEY') ?: '', // <-- set this (or env var)
-    'chat_model' => 'gpt-4.1-mini',
-    'tts_model' => 'gpt-4o-mini-tts',
-    'stt_model' => 'gpt-4o-mini-transcribe',
+    'chat_model' => 'gpt-4o', // Most intelligent model
+    'tts_model' => 'tts-1',
+    'stt_model' => 'whisper-1',
     'voice_default' => 'cedar',
     // Built-in voices (OpenAI Audio API):
     'voices' => ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'],

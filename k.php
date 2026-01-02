@@ -954,17 +954,18 @@ function render_app(): void
   echo '<script src="' . h(asset('public/assets/hologram3d.js')) . '"></script>';
 
   echo '<script>
+    // Global hologram reference
+    window.hologram = null;
+    
     // Wait for everything to load
     window.onload = function() {
       console.log("KELION: Window loaded, initializing...");
       
       // Initialize 3D Hologram
-      let hologram = null;
       if (typeof HologramUnit !== "undefined") {
         console.log("KELION: HologramUnit found, creating instance...");
-        hologram = new HologramUnit("hologram-app");
-        hologram.activateFullMode();
-        window.hologram = hologram;
+        window.hologram = new HologramUnit("hologram-app");
+        window.hologram.activateFullMode();
         console.log("KELION: Hologram initialized successfully!");
       } else {
         console.error("KELION: HologramUnit not found!");
@@ -999,7 +1000,7 @@ function render_app(): void
       q.value = "";
       
       // Hologram thinking state
-      if(hologram) hologram.intensify();
+      if(window.hologram) window.hologram.intensify();
 
       const fd = new FormData();
       fd.append("csrf", csrf);
@@ -1009,7 +1010,7 @@ function render_app(): void
       const j = await r.json().catch(()=>({ok:false,error:"Bad JSON"}));
       if(!j.ok){ 
         addMsg("assistant", "Error: " + (j.error||"unknown")); 
-        if(hologram) hologram.calm();
+        if(window.hologram) window.hologram.calm();
         return; 
       }
       addMsg("assistant", j.answer);
@@ -1026,22 +1027,22 @@ function render_app(): void
       if(!r.ok){
         const msg = await r.text();
         addMsg("assistant", "TTS error: " + msg);
-        if(hologram) hologram.calm();
+        if(window.hologram) window.hologram.calm();
         return;
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       player.src = url;
 
-      // Connect hologram lip sync to audio
+      // Connect window.hologram lip sync to audio
       player.onplay = () => {
-        if(hologram) hologram.speakWithAudio(player);
+        if(window.hologram) window.hologram.speakWithAudio(player);
       };
       player.onended = () => {
-        if(hologram) hologram.calm();
+        if(window.hologram) window.hologram.calm();
       };
       player.onpause = () => {
-        if(hologram) hologram.calm();
+        if(window.hologram) window.hologram.calm();
       };
 
       try{ await player.play(); }catch(e){ console.log("Autoplay blocked:", e); }
@@ -1089,13 +1090,13 @@ function render_app(): void
           }
           
           btnDictate.textContent = "🎤 Dictate";
-          if(hologram) hologram.calm();
+          if(window.hologram) window.hologram.calm();
         };
         
         mediaRecorder.start();
         isRecording = true;
         btnDictate.textContent = "⏹️ Stop (5s)";
-        if(hologram) { hologram.state = "listening"; }
+        if(window.hologram) { window.hologram.state = "listening"; }
         
         setTimeout(() => {
           if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
@@ -1124,13 +1125,13 @@ function render_app(): void
       rec.continuous = false;
       rec.interimResults = false;
       rec.lang = (navigator.language || "en-GB");
-      if(hologram) hologram.state = "listening";
+      if(window.hologram) window.hologram.state = "listening";
       rec.onresult = (e) => {
         const t = e.results?.[0]?.[0]?.transcript || "";
         q.value = (q.value ? (q.value + " ") : "") + t;
       };
       rec.onend = () => {
-        if(hologram) hologram.calm();
+        if(window.hologram) window.hologram.calm();
       };
       rec.start();
     }
@@ -1153,14 +1154,14 @@ function render_app(): void
       micData = new Uint8Array(micAnalyser.fftSize);
       micSrc = micCtx.createMediaStreamSource(micStream);
       micSrc.connect(micAnalyser);
-      if(hologram) hologram.state = "listening";
+      if(window.hologram) window.hologram.state = "listening";
 
       function rms(u8){ let sum=0; for(let i=0;i<u8.length;i++){ const v=(u8[i]-128)/128; sum+=v*v; } return Math.sqrt(sum/u8.length); }
       function tick(){
         if(!micAnalyser) return;
         micAnalyser.getByteTimeDomainData(micData);
         const level = Math.min(1, rms(micData)*6);
-        if(hologram) hologram.voiceIntensity = level;
+        if(window.hologram) window.hologram.voiceIntensity = level;
         micRAF = requestAnimationFrame(tick);
       }
       tick();
@@ -1170,14 +1171,14 @@ function render_app(): void
       if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
       if(micCtx){ try{ micCtx.close(); }catch(e){} micCtx=null; }
       micAnalyser=null; micData=null; micSrc=null;
-      if(hologram) hologram.calm();
+      if(window.hologram) window.hologram.calm();
     }
     document.getElementById("btnListen").onclick = async ()=>{ if(!micStream) await startLiveMic(); else stopLiveMic(); };
 
     document.getElementById("btnStopAll").onclick = ()=>{
       try{ speechSynthesis.cancel(); }catch(e){}
       try{ player.pause(); }catch(e){}
-      if(hologram) hologram.calm();
+      if(window.hologram) window.hologram.calm();
     };
 
     q.addEventListener("keydown",(e)=>{
