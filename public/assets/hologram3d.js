@@ -209,14 +209,14 @@ class HologramUnit {
             this.setupModel(gltf);
         }, (xhr) => {
             // Progress
-            // if(this.onProgress) this.onProgress((xhr.loaded / xhr.total) * 100);
         }, (e) => {
             console.error("Hologram: Error loading GLB:", e);
-            // Retry with alternate path if first fails
-            console.log("Hologram: Retrying with alternate path /hologram.glb ...");
+            // FAILSAFE: Try root path /hologram.glb
             loader.load('/hologram.glb', (gltf) => this.setupModel(gltf), undefined, () => {
                 console.warn("GLB failed loading from both paths. Fallback to procedural.");
                 this.createProceduralHead();
+                this.isLoaded = true; // Still mark as loaded so routines can run
+                if (this.onReady) this.onReady();
             });
         });
     }
@@ -258,7 +258,9 @@ class HologramUnit {
 
         // Try playing 'Idle' or first animation
         this.playAnim('Idle');
-        console.log("Hologram Brain: ACTIVE.");
+        this.isLoaded = true;
+        if (this.onReady) this.onReady();
+        console.log("Hologram Brain: ACTIVE. isLoaded = true");
     }
 
     findMouthComponents() {
