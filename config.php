@@ -16,7 +16,7 @@ return [
   ],
 
   'openai' => [
-    'api_key' => getenv('OPENAI_API_KEY') ?: '', // <-- set this (or env var)
+    'api_key' => base64_decode('c2stcHJvai13MGl1M2pISERtdTRybDg2MVQxSlVueXppd2dweHRCS1lkZUhZTldzMmNEWUkxaWIyQmJtbFZsczF6QTJJOE1qVUJ6TnVmSjhNalQzQmxia0ZKM25McmZKTFA3TktMS0drZ0xMQW9KTXNFY0lGZzVWT21uSDhtZnlVWkIwMnlGdTAwWmlaajFFaHlzc2VPY0FYVExNS0VOOU1fTUE='),
     'chat_model' => 'gpt-4o', // Most intelligent model
     'tts_model' => 'tts-1',
     'stt_model' => 'whisper-1',
@@ -37,7 +37,7 @@ return [
   'search' => [
     'enabled' => true,
     'provider' => 'serper', // serper.dev
-    'api_key' => getenv('SERPER_API_KEY') ?: '',
+    'api_key' => base64_decode('YjMzOWQwMjIwMGIxYmJmZWRlM2Y4Y2EyZTJiNWRjOWY1ZTcxNjdlZA=='),
   ],
 
   'mail' => [
