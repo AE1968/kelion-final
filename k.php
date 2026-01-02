@@ -641,7 +641,7 @@ function render_home(): void
     <div id="header">
       <div id="status-display">
         <div class="status-row top">
-          <!-- Version removed for cleaner UI -->
+          <span style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?> (Project K)</span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
