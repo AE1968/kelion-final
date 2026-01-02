@@ -642,8 +642,12 @@ function render_home(): void
       <div id="status-display">
         <div class="status-row top">
           <!-- Version removed for cleaner UI -->
-          <span>USER: <span class="stat-val"><?= $username ?></span></span>
-          <span>CLOUD: <span class="stat-val <?= $cloudClass ?>"><?= $cloudStatus ?></span></span>
+          <span>USER: <span class="stat-val">
+              <?= $username ?>
+            </span></span>
+          <span>CLOUD: <span class="stat-val <?= $cloudClass ?>">
+              <?= $cloudStatus ?>
+            </span></span>
         </div>
         <div class="status-row bottom">
           <div id="system-clock">
@@ -714,9 +718,11 @@ function render_home(): void
     <!-- Footer Ticker -->
     <div id="footer-ticker">
       <div class="ticker-text">
-        ★ KELION AI • Neural Interface Active • Hologram System Online • <?= h($version) ?> • Secure Connection
+        ★ KELION AI • Neural Interface Active • Hologram System Online •
+        <?= h($version) ?> • Secure Connection
         Established ★
-        KELION AI • Neural Interface Active • Hologram System Online • <?= h($version) ?> • Secure Connection Established
+        KELION AI • Neural Interface Active • Hologram System Online •
+        <?= h($version) ?> • Secure Connection Established
         ★
       </div>
     </div>
@@ -1040,7 +1046,7 @@ function render_app(): void
       // Connect window.hologram lip sync to audio IMMEDIATELY (Before Play)
       if(window.hologram) {
          // Ensure AudioContext is ready/resumed
-         if(window.hologram.audioCtx && window.hologram.audioCtx.state === 'suspended') {
+         if(window.hologram.audioCtx && window.hologram.audioCtx.state === "suspended") {
              window.hologram.audioCtx.resume().then(() => {
                  console.log("AudioContext resumed for playback");
              });
