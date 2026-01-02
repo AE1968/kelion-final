@@ -641,7 +641,7 @@ function render_home(): void
     <div id="header">
       <div id="status-display">
         <div class="status-row top">
-          <span class="version-tag" style="font-weight:700; color:var(--cyan);"><?= h($version) ?> (Project K)</span>
+          <!-- Version removed for cleaner UI -->
           <span>USER: <span class="stat-val"><?= $username ?></span></span>
           <span>CLOUD: <span class="stat-val <?= $cloudClass ?>"><?= $cloudStatus ?></span></span>
         </div>
