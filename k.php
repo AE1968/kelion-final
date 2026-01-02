@@ -1136,7 +1136,7 @@ function render_app(): void
       rec.continuous = false;
       rec.interimResults = false;
       rec.lang = (navigator.language || "en-GB");
-      if(window.hologram) window.hologram.state = "listening";
+      if(window.hologram) window.hologram.listen();
       rec.onresult = (e) => {
         const t = e.results?.[0]?.[0]?.transcript || "";
         q.value = (q.value ? (q.value + " ") : "") + t;
@@ -1165,7 +1165,7 @@ function render_app(): void
       micData = new Uint8Array(micAnalyser.fftSize);
       micSrc = micCtx.createMediaStreamSource(micStream);
       micSrc.connect(micAnalyser);
-      if(window.hologram) window.hologram.state = "listening";
+      if(window.hologram) window.hologram.listen();
 
       function rms(u8){ let sum=0; for(let i=0;i<u8.length;i++){ const v=(u8[i]-128)/128; sum+=v*v; } return Math.sqrt(sum/u8.length); }
       function tick(){

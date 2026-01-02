@@ -313,20 +313,47 @@ class HologramUnit {
             transparent: false,
             side: THREE.FrontSide,
             emissive: new THREE.Color(0x200020),
+```
             emissiveIntensity: 0.2
         });
     }
 
     playAnim(name) {
-        if (!this.mixer || !this.animations) return;
+        if(!this.mixer || !this.animations) return;
+        
+        // Find best matching animation from the bought model
+        // e.g. "Talking", "Speak", "Listen", "Idle"
         const key = Object.keys(this.animations).find(k => k.toLowerCase().includes(name.toLowerCase()));
+        
         if (key && this.animations[key]) {
-            if (this.mixer.stopAllAction) this.mixer.stopAllAction();
+            if (this.currentAnim === key) return; // Don't restart if same
+            
+            // Fade out current
+            if(this.currentAnim && this.animations[this.currentAnim]) {
+                this.animations[this.currentAnim].fadeOut(0.5);
+            }
+            
             this.animations[key].reset().fadeIn(0.5).play();
+            this.currentAnim = key;
+            console.log(`Hologram: Playing bought animation '${key}'`);
         } else {
-            // Play first animation if idle not found
-            const first = Object.keys(this.animations)[0];
-            if (first && this.animations[first]) this.animations[first].play();
+             console.log(`Hologram: Animation '${name}' not found.Available: `, Object.keys(this.animations));
+             // Fallback to Idle if specific interaction anim missing
+             if(name !== 'Idle') this.playAnim('Idle');
+        }
+    }
+
+    listen() {
+        this.state = 'listening';
+        this.baseEmissive = 0.8;
+        // Try to play a listening animation if the purchased model has one
+        this.playAnim('listen'); 
+        // If no 'listen' anim found, playAnim will fallback or keep current
+        
+        // Tilt head slightly if possible (procedural enhancement)
+        if(this.model) {
+             // We can Tween this if we had a tween lib, but direct set for now
+             // logic in update() will handle smooth return
         }
     }
 
@@ -335,9 +362,17 @@ class HologramUnit {
 
         // Update lip sync (analyzes audio and animates mouth)
         this.updateLipSync(delta);
-
-        // Voice intensity calculation
-        // handled in updateLipSync
+        
+        // Procedural Idle / Listening Motion
+        if(this.model && this.state === 'listening') {
+             // Subtle head tilt for listening
+             this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0.2, 0.05);
+             this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0.05, 0.05);
+        } else if(this.model && this.state === 'idle') {
+             // Return to center
+             this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0, 0.05);
+             this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0, 0.05);
+        }
 
         // Render
         if (this.composer) this.composer.render();
