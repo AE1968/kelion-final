@@ -2,7 +2,7 @@
 return [
   'app' => [
     'name' => 'KELION AI',
-    'version' => 'v1.0.3',
+    'version' => 'v1.0.4',
     'base_url' => '',
     'timezone' => 'Europe/London',
     'default_ui_lang' => 'English',
@@ -18,11 +18,11 @@ return [
   'openai' => [
     'api_key' => getenv('OPENAI_API_KEY') ?: '', // <-- set this (or env var)
     'chat_model' => 'gpt-4.1-mini',
-    'tts_model'  => 'gpt-4o-mini-tts',
-    'stt_model'  => 'gpt-4o-mini-transcribe',
+    'tts_model' => 'gpt-4o-mini-tts',
+    'stt_model' => 'gpt-4o-mini-transcribe',
     'voice_default' => 'cedar',
     // Built-in voices (OpenAI Audio API):
-    'voices' => ['alloy','ash','ballad','coral','echo','fable','nova','onyx','sage','shimmer','verse','marin','cedar'],
+    'voices' => ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'],
     // Optional mapping (heuristic). User can override in UI.
     'voice_by_lang' => [
       'English' => 'cedar',

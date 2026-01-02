@@ -964,21 +964,107 @@ function render_app(): void
     document.getElementById("btnAsk").onclick = ask;
     document.getElementById("btnClear").onclick = ()=>q.value="";
 
-    let rec=null;
-    document.getElementById("btnDictate").onclick = ()=>{
+    // STT using OpenAI via backend API
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    const btnDictate = document.getElementById("btnDictate");
+    
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          
+          // Send to OpenAI STT API
+          btnDictate.textContent = "🔄 Processing...";
+          const fd = new FormData();
+          fd.append("csrf", csrf);
+          fd.append("audio", audioBlob, "recording.webm");
+          
+          try {
+            const r = await fetch("k.php?r=api_stt", { method: "POST", body: fd });
+            const j = await r.json();
+            if (j.ok && j.text) {
+              q.value = (q.value ? (q.value + " ") : "") + j.text;
+            } else {
+              console.error("STT error:", j.error);
+              // Fallback message
+              addMsg("assistant", "STT Error: " + (j.error || "Could not transcribe audio"));
+            }
+          } catch(e) {
+            console.error("STT fetch error:", e);
+          }
+          
+          btnDictate.textContent = "🎤 Dictate";
+          window.HOLOGRAM.state = "idle";
+          window.HOLOGRAM.focus = 0;
+        };
+        
+        mediaRecorder.start();
+        isRecording = true;
+        btnDictate.textContent = "⏹️ Stop (5s)";
+        window.HOLOGRAM.state = "listening";
+        window.HOLOGRAM.emotion = "alert";
+        window.HOLOGRAM.focus = 0.8;
+        
+        // Auto-stop after 5 seconds
+        setTimeout(() => {
+          if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+            stopRecording();
+          }
+        }, 5000);
+        
+      } catch(e) {
+        console.error("Mic access denied:", e);
+        alert("Microphone access denied. Please allow microphone access.");
+        // Fallback to browser SpeechRecognition
+        fallbackBrowserSTT();
+      }
+    }
+    
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        isRecording = false;
+      }
+    }
+    
+    function fallbackBrowserSTT() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if(!SR){ alert("SpeechRecognition not supported"); return; }
-      if(rec){ rec.stop(); rec=null; return; }
-      rec = new SR();
-      rec.continuous=false; rec.interimResults=false;
+      if(!SR){ alert("Speech recognition not supported"); return; }
+      const rec = new SR();
+      rec.continuous = false;
+      rec.interimResults = false;
       rec.lang = (navigator.language || "en-GB");
-      window.HOLOGRAM.state="listening"; window.HOLOGRAM.emotion="alert"; window.HOLOGRAM.focus=0.8;
-      rec.onresult = (e)=>{
+      window.HOLOGRAM.state = "listening";
+      window.HOLOGRAM.emotion = "alert";
+      window.HOLOGRAM.focus = 0.8;
+      rec.onresult = (e) => {
         const t = e.results?.[0]?.[0]?.transcript || "";
-        q.value = (q.value ? (q.value+" ") : "") + t;
+        q.value = (q.value ? (q.value + " ") : "") + t;
       };
-      rec.onend = ()=>{ rec=null; window.HOLOGRAM.state="idle"; window.HOLOGRAM.focus=0; };
+      rec.onend = () => {
+        window.HOLOGRAM.state = "idle";
+        window.HOLOGRAM.focus = 0;
+      };
       rec.start();
+    }
+    
+    btnDictate.onclick = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
     };
 
     let micStream=null, micCtx=null, micAnalyser=null, micData=null, micSrc=null, micRAF=null;
@@ -1398,6 +1484,91 @@ if ($r === 'api_tts' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   header('Content-Disposition: inline; filename="kelion_tts.mp3"');
   echo $tts['bin'];
   exit;
+}
+
+// API: Speech-to-Text (STT)
+if ($r === 'api_stt' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  require_login();
+  require_active_subscription();
+  csrf_check();
+
+  // Check for uploaded audio file
+  if (!isset($_FILES['audio']) || $_FILES['audio']['error'] !== UPLOAD_ERR_OK) {
+    json_out(['ok' => false, 'error' => 'No audio file uploaded'], 400);
+  }
+
+  $file = $_FILES['audio'];
+  $audioData = file_get_contents($file['tmp_name']);
+  $filename = $file['name'] ?: 'audio.webm';
+
+  // Optional language hint
+  $language = trim((string) ($_POST['language'] ?? ''));
+
+  // Call OpenAI STT
+  $result = openai_stt($audioData, $filename, $language ?: null);
+
+  if (!$result['ok']) {
+    json_out(['ok' => false, 'error' => $result['error'] ?? 'STT failed'], 500);
+  }
+
+  json_out(['ok' => true, 'text' => $result['text']]);
+}
+
+// Contact Form Submission
+if ($r === 'contact_submit' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  csrf_check();
+
+  $email = trim((string) ($_POST['email'] ?? ''));
+  $name = trim((string) ($_POST['name'] ?? 'Anonymous'));
+  $topic = trim((string) ($_POST['topic'] ?? 'general'));
+  $message = trim((string) ($_POST['message'] ?? ''));
+
+  // Validate
+  if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    // Redirect back with error
+    $_SESSION['contact_error'] = 'Please provide a valid email address.';
+    redirect('k.php?r=home');
+  }
+  if ($message === '') {
+    $_SESSION['contact_error'] = 'Please enter a message.';
+    redirect('k.php?r=home');
+  }
+
+  // Log the contact submission
+  $logEntry = sprintf(
+    "[%s] CONTACT FORM\nEmail: %s\nName: %s\nTopic: %s\nMessage: %s\n---\n",
+    date('Y-m-d H:i:s'),
+    $email,
+    $name,
+    $topic,
+    $message
+  );
+
+  $logFile = __DIR__ . '/storage/contact_log.txt';
+  @file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+
+  // Try to send email notification if SMTP is enabled
+  global $CONFIG;
+  $smtpEnabled = $CONFIG['mail']['smtp']['enabled'] ?? false;
+  $emailSent = false;
+
+  if ($smtpEnabled) {
+    $adminEmail = $CONFIG['mail']['from'] ?? 'contact@kelionai.app';
+    $subject = "KELION Contact: [$topic] from $name";
+    $body = "New contact form submission:\n\n";
+    $body .= "From: $name <$email>\n";
+    $body .= "Topic: $topic\n\n";
+    $body .= "Message:\n$message\n";
+
+    // Use mailer function if available
+    if (function_exists('send_mail')) {
+      $emailSent = send_mail($adminEmail, $subject, $body);
+    }
+  }
+
+  // Store success message
+  $_SESSION['contact_success'] = 'Thank you! Your message has been received.' . ($emailSent ? '' : ' (Email notification pending)');
+  redirect('k.php?r=home');
 }
 
 // ------------------- POST handlers -------------------
