@@ -17,22 +17,23 @@ return [
 
   'openai' => [
     'api_key' => base64_decode('c2stcHJvai1NTlhQT2FUSmpnYVYxeE1nRVZyTjBiV2lCTkEyYkZsQmpQR21PNDVTNEJkTGtQMjVUV2ZpQU5XRnRaM005REk3anR6RFZxYXFHZFQzQmxia0ZKUE1weFRDcnYzM1Nsb3E0TXhldmI5WWNFd1dKckZDY0JOdkdEWTVRV2MzUFNsRjYzazFoZEZKV2otWVFfd2dsZTZsRkFaNW4wa0E='),
-    'chat_model' => 'gpt-4o', // Most intelligent model
+    'chat_model' => 'gpt-4o',
     'tts_model' => 'tts-1',
     'stt_model' => 'whisper-1',
-    'voice_default' => 'cedar',
-    // Built-in voices (OpenAI Audio API):
-    'voices' => ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'],
-    // Optional mapping (heuristic). User can override in UI.
-    'voice_by_lang' => [
-      'English' => 'onyx',
-      'Romanian' => 'onyx', // Deep male voice
-      'Spanish' => 'echo',
-      'French' => 'alloy',
-      'German' => 'onyx',
-      'Italian' => 'echo',
-      'Russian' => 'onyx',
-    ],
+    'voice_default' => 'pNInz6obpgDQGcFmaJgB', // Adam (ElevenLabs)
+  ],
+
+  'elevenlabs' => [
+    'enabled' => true,
+    'api_key' => base64_decode('c2tfZWZlODkxMzZjNDhmOWQzYTdkN2UyZjFjOTJmYzc5NzAyMjBjOGNiNzRjYWFlOWQ4'),
+  ],
+
+  'voices_map' => [
+    'English' => 'pNInz6obpgDQGcFmaJgB', // Adam
+    'Romanian' => 'pNInz6obpgDQGcFmaJgB', // Adam
+    'Spanish' => 'pNInz6obpgDQGcFmaJgB', // Adam
+    'French' => 'pNInz6obpgDQGcFmaJgB', // Adam
+    'German' => 'pNInz6obpgDQGcFmaJgB', // Adam
   ],
 
   'search' => [

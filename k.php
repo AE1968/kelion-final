@@ -1544,9 +1544,10 @@ if ($r === 'api_ask' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   $detectedLang = $ans['lang'] ?? 'English';
 
   // Auto-select voice based on language
-  $voiceMap = $CONFIG['openai']['voice_by_lang'] ?? [];
+  $voiceMap = $CONFIG['voices_map'] ?? ($CONFIG['openai']['voice_by_lang'] ?? []);
+
   // Fuzzy match or exact match
-  $autoVoice = $voiceMap['English'] ?? 'onyx'; // Fallback
+  $autoVoice = $voiceMap['English'] ?? 'pNInz6obpgDQGcFmaJgB'; // Fallback Adam
   foreach ($voiceMap as $l => $v) {
     if (stripos($detectedLang, $l) !== false) {
       $autoVoice = $v;
@@ -1579,7 +1580,25 @@ if ($r === 'api_tts' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   if ($voice === '')
     $voice = (string) ($_SESSION['voice'] ?? '');
 
-  $tts = openai_tts_mp3($text, $voice ?: null);
+  global $CONFIG;
+  $openaiVoices = $CONFIG['openai']['voices'] ?? [];
+  $useEleven = false;
+
+  if ($CONFIG['elevenlabs']['enabled'] ?? false) {
+    if ($voice && !in_array($voice, $openaiVoices)) {
+      $useEleven = true;
+    } elseif (!$voice && ($CONFIG['openai']['voice_default'] ?? '') === 'pNInz6obpgDQGcFmaJgB') {
+      $useEleven = true;
+    }
+  }
+
+  if ($useEleven) {
+    require_once __DIR__ . '/app/lib/elevenlabs.php';
+    $tts = elevenlabs_tts($text, $voice);
+  } else {
+    $tts = openai_tts_mp3($text, $voice ?: null);
+  } // End if/else
+
   if (!$tts['ok']) {
     http_response_code(400);
     exit("TTS error: " . ($tts['error'] ?? 'unknown'));
