@@ -135,7 +135,7 @@ function render_reset(?string $err = null): void
 function render_home(): void
 {
   global $CONFIG;
-  $version = $CONFIG['app']['version'] ?? 'v1.0.2';
+  $version = $CONFIG['app']['version'] ?? 'v1.0.7';
   $u = current_user();
   $username = $u ? h($u['username']) : 'OFFLINE';
   $cloudStatus = $u ? 'CONNECTED' : 'DISCONNECTED';
@@ -641,7 +641,9 @@ function render_home(): void
     <div id="header">
       <div id="status-display">
         <div class="status-row top">
-          <span style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?> (Project K)</span>
+          <span
+            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?>
+            (Project K)</span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
