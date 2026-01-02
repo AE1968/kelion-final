@@ -47,7 +47,7 @@ function render_login(?string $err = null): void
   echo '<button class="btn" type="submit">Login</button>';
   echo '</form>';
   echo '<div style="height:14px"></div>';
-  echo '<div class="mut">Demo: <b>demo / demo</b> • Admin: <b>admin / admin1234</b> (change for production)</div>';
+  echo '<div class="mut">Demo: <b>demo / demo</b></div>';
   echo '</div></div>';
   page_footer();
 }
