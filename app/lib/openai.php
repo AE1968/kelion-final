@@ -57,7 +57,7 @@ function kelion_safety_block(string $text): ?string
   return null;
 }
 
-function openai_answer(string $userText, string $lang = 'AUTO'): array
+function openai_answer(string $userText, string $lang = 'AUTO', array $conversationHistory = []): array
 {
   $block = kelion_safety_block($userText);
   if ($block)
@@ -65,13 +65,32 @@ function openai_answer(string $userText, string $lang = 'AUTO'): array
 
   global $CONFIG;
   $model = $CONFIG['openai']['chat_model'] ?? 'gpt-4.1-mini';
-  $system = "You are KELION, a futuristic hologram guardian assistant. UI is English. Reply in the user's language. Safety policy: refuse any request involving violence, weapons, hate/harassment, self-harm, sexual content involving minors, illegal wrongdoing, or instructions that could harm people. If asked, respond calmly and offer safe alternatives.";
+
+  // System prompt
+  $system = "You are KELION, a futuristic hologram guardian assistant. You have memory of this conversation. UI is English. Reply in the user's language. Be helpful, friendly, and remember previous context. Safety policy: refuse any request involving violence, weapons, hate/harassment, self-harm, sexual content involving minors, illegal wrongdoing, or instructions that could harm people. If asked, respond calmly and offer safe alternatives.";
+
+  // Build messages array with history
+  $messages = [
+    ['role' => 'system', 'content' => [['type' => 'text', 'text' => $system]]]
+  ];
+
+  // Add conversation history (last 10 messages for context)
+  $historyLimit = min(count($conversationHistory), 10);
+  for ($i = 0; $i < $historyLimit; $i++) {
+    $msg = $conversationHistory[$i];
+    $role = $msg['role'] === 'user' ? 'user' : 'assistant';
+    $messages[] = [
+      'role' => $role,
+      'content' => [['type' => 'text', 'text' => (string) $msg['text']]]
+    ];
+  }
+
+  // Add current user message
+  $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userText]]];
+
   $payload = [
     'model' => $model,
-    'input' => [
-      ['role' => 'system', 'content' => [['type' => 'text', 'text' => $system]]],
-      ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userText]]],
-    ],
+    'input' => $messages,
   ];
   $res = openai_post_json('https://api.openai.com/v1/responses', $payload);
   if (!$res['ok'])

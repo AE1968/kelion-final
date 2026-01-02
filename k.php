@@ -895,7 +895,8 @@ function render_app(): void
   echo '<div class="card">';
   echo '<h2>Conversation Task</h2>';
   echo '<div class="mut">Voice-first conversation with hologram.</div>';
-  echo '<canvas class="canvas" id="holo"></canvas>';
+  // 3D Hologram container (using Three.js)
+  echo '<div id="hologram-app" style="width:100%;height:300px;background:#0a0a15;border-radius:8px;overflow:hidden;"></div>';
 
   echo '<div class="row" style="margin-top:12px">';
   echo '<button class="btn" id="btnListen">🎧 Live Mic</button>';
@@ -941,10 +942,27 @@ function render_app(): void
 
   echo '</div></div>';
 
-  echo '<script type="module">
-    import { initHologram } from "' . h(asset('public/assets/hologram.js')) . '";
-    const canvas = document.getElementById("holo");
-    initHologram(canvas);
+  // Load Three.js and hologram3d.js
+  echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>';
+  echo '<script src="' . h(asset('public/assets/hologram3d.js')) . '"></script>';
+
+  echo '<script>
+    // Initialize 3D Hologram
+    let hologram = null;
+    window.addEventListener("DOMContentLoaded", () => {
+      if (typeof HologramUnit !== "undefined") {
+        hologram = new HologramUnit("hologram-app");
+        hologram.activateFullMode();
+        window.hologram = hologram;
+      }
+    });
 
     const csrf = ' . json_encode(csrf_token()) . ';
     const chat = document.getElementById("chat");
@@ -963,7 +981,7 @@ function render_app(): void
     function addMsg(role, text){
       const d = document.createElement("div");
       d.className = "msg " + (role==="user" ? "user":"bot");
-      d.innerHTML = `<div class="mut" style="font-size:12px;margin-bottom:6px">${role} • now</div>` + (text||"").replace(/\n/g,"<br>");
+      d.innerHTML = `<div class="mut" style="font-size:12px;margin-bottom:6px">${role} • now</div>` + (text||"").replace(/\\n/g,"<br>");
       chat.appendChild(d);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -973,7 +991,9 @@ function render_app(): void
       if(!text) return;
       addMsg("user", text);
       q.value = "";
-      window.HOLOGRAM.state="thinking"; window.HOLOGRAM.emotion="calm"; window.HOLOGRAM.focus=0.7;
+      
+      // Hologram thinking state
+      if(hologram) hologram.intensify();
 
       const fd = new FormData();
       fd.append("csrf", csrf);
@@ -981,7 +1001,11 @@ function render_app(): void
 
       const r = await fetch("k.php?r=api_ask", { method:"POST", body: fd });
       const j = await r.json().catch(()=>({ok:false,error:"Bad JSON"}));
-      if(!j.ok){ addMsg("assistant", "Error: " + (j.error||"unknown")); window.HOLOGRAM.state="idle"; window.HOLOGRAM.focus=0; return; }
+      if(!j.ok){ 
+        addMsg("assistant", "Error: " + (j.error||"unknown")); 
+        if(hologram) hologram.calm();
+        return; 
+      }
       addMsg("assistant", j.answer);
       await tts(j.answer);
     }
@@ -996,49 +1020,25 @@ function render_app(): void
       if(!r.ok){
         const msg = await r.text();
         addMsg("assistant", "TTS error: " + msg);
-        window.HOLOGRAM.state="idle"; window.HOLOGRAM.focus=0;
+        if(hologram) hologram.calm();
         return;
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       player.src = url;
 
-      let audioCtx, analyser, srcNode, data;
-      function ensureAnalyser(){
-        if(analyser) return;
-        audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        data = new Uint8Array(analyser.fftSize);
-        srcNode = audioCtx.createMediaElementSource(player);
-        srcNode.connect(analyser);
-        analyser.connect(audioCtx.destination);
-      }
-      function rms(u8){
-        let sum=0;
-        for(let i=0;i<u8.length;i++){
-          const v=(u8[i]-128)/128; sum += v*v;
-        }
-        return Math.sqrt(sum/u8.length);
-      }
-      function tick(){
-        if(!analyser) return;
-        analyser.getByteTimeDomainData(data);
-        const level = Math.min(1, rms(data)*6);
-        window.HOLOGRAM.voiceLevel = level;
-        window.HOLOGRAM.state = player.paused ? "idle" : "speaking";
-        requestAnimationFrame(tick);
-      }
-      player.onplay = async ()=>{
-        ensureAnalyser();
-        try{ await audioCtx.resume(); }catch(e){}
-        window.HOLOGRAM.state="speaking";
-        tick();
+      // Connect hologram lip sync to audio
+      player.onplay = () => {
+        if(hologram) hologram.speakWithAudio(player);
       };
-      player.onended = ()=>{ window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.state="idle"; window.HOLOGRAM.focus=0; };
-      player.onpause = ()=>{ window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.state="idle"; };
+      player.onended = () => {
+        if(hologram) hologram.calm();
+      };
+      player.onpause = () => {
+        if(hologram) hologram.calm();
+      };
 
-      try{ await player.play(); }catch(e){}
+      try{ await player.play(); }catch(e){ console.log("Autoplay blocked:", e); }
     }
 
     document.getElementById("btnAsk").onclick = ask;
@@ -1064,7 +1064,6 @@ function render_app(): void
           stream.getTracks().forEach(t => t.stop());
           const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           
-          // Send to OpenAI STT API
           btnDictate.textContent = "🔄 Processing...";
           const fd = new FormData();
           fd.append("csrf", csrf);
@@ -1077,7 +1076,6 @@ function render_app(): void
               q.value = (q.value ? (q.value + " ") : "") + j.text;
             } else {
               console.error("STT error:", j.error);
-              // Fallback message
               addMsg("assistant", "STT Error: " + (j.error || "Could not transcribe audio"));
             }
           } catch(e) {
@@ -1085,18 +1083,14 @@ function render_app(): void
           }
           
           btnDictate.textContent = "🎤 Dictate";
-          window.HOLOGRAM.state = "idle";
-          window.HOLOGRAM.focus = 0;
+          if(hologram) hologram.calm();
         };
         
         mediaRecorder.start();
         isRecording = true;
         btnDictate.textContent = "⏹️ Stop (5s)";
-        window.HOLOGRAM.state = "listening";
-        window.HOLOGRAM.emotion = "alert";
-        window.HOLOGRAM.focus = 0.8;
+        if(hologram) { hologram.state = "listening"; }
         
-        // Auto-stop after 5 seconds
         setTimeout(() => {
           if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
             stopRecording();
@@ -1105,8 +1099,7 @@ function render_app(): void
         
       } catch(e) {
         console.error("Mic access denied:", e);
-        alert("Microphone access denied. Please allow microphone access.");
-        // Fallback to browser SpeechRecognition
+        alert("Microphone access denied.");
         fallbackBrowserSTT();
       }
     }
@@ -1125,16 +1118,13 @@ function render_app(): void
       rec.continuous = false;
       rec.interimResults = false;
       rec.lang = (navigator.language || "en-GB");
-      window.HOLOGRAM.state = "listening";
-      window.HOLOGRAM.emotion = "alert";
-      window.HOLOGRAM.focus = 0.8;
+      if(hologram) hologram.state = "listening";
       rec.onresult = (e) => {
         const t = e.results?.[0]?.[0]?.transcript || "";
         q.value = (q.value ? (q.value + " ") : "") + t;
       };
       rec.onend = () => {
-        window.HOLOGRAM.state = "idle";
-        window.HOLOGRAM.focus = 0;
+        if(hologram) hologram.calm();
       };
       rec.start();
     }
@@ -1147,6 +1137,7 @@ function render_app(): void
       }
     };
 
+    // Live Mic visualization
     let micStream=null, micCtx=null, micAnalyser=null, micData=null, micSrc=null, micRAF=null;
     async function startLiveMic(){
       if(micStream) return;
@@ -1156,15 +1147,14 @@ function render_app(): void
       micData = new Uint8Array(micAnalyser.fftSize);
       micSrc = micCtx.createMediaStreamSource(micStream);
       micSrc.connect(micAnalyser);
-      window.HOLOGRAM.state="listening"; window.HOLOGRAM.emotion="alert"; window.HOLOGRAM.focus=0.85;
+      if(hologram) hologram.state = "listening";
 
       function rms(u8){ let sum=0; for(let i=0;i<u8.length;i++){ const v=(u8[i]-128)/128; sum+=v*v; } return Math.sqrt(sum/u8.length); }
       function tick(){
         if(!micAnalyser) return;
         micAnalyser.getByteTimeDomainData(micData);
         const level = Math.min(1, rms(micData)*6);
-        window.HOLOGRAM.voiceLevel = level;
-        window.HOLOGRAM.emotion = level>0.15 ? "active" : "alert";
+        if(hologram) hologram.voiceIntensity = level;
         micRAF = requestAnimationFrame(tick);
       }
       tick();
@@ -1174,14 +1164,14 @@ function render_app(): void
       if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
       if(micCtx){ try{ micCtx.close(); }catch(e){} micCtx=null; }
       micAnalyser=null; micData=null; micSrc=null;
-      window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.state="idle"; window.HOLOGRAM.emotion="calm"; window.HOLOGRAM.focus=0;
+      if(hologram) hologram.calm();
     }
     document.getElementById("btnListen").onclick = async ()=>{ if(!micStream) await startLiveMic(); else stopLiveMic(); };
 
     document.getElementById("btnStopAll").onclick = ()=>{
       try{ speechSynthesis.cancel(); }catch(e){}
       try{ player.pause(); }catch(e){}
-      window.HOLOGRAM.voiceLevel=0; window.HOLOGRAM.state="idle"; window.HOLOGRAM.focus=0;
+      if(hologram) hologram.calm();
     };
 
     q.addEventListener("keydown",(e)=>{
@@ -1519,7 +1509,17 @@ if ($r === 'api_ask' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   $stmt->bindValue(':t', $q, SQLITE3_TEXT);
   $stmt->execute();
 
-  $ans = openai_answer($q, 'AUTO');
+  // Get conversation history for AI memory (last 10 messages)
+  $history = [];
+  $histStmt = $db->prepare("SELECT role, text FROM conversation_messages WHERE conversation_id=:c ORDER BY id DESC LIMIT 10");
+  $histStmt->bindValue(':c', $cid, SQLITE3_INTEGER);
+  $histRes = $histStmt->execute();
+  while ($hRow = $histRes->fetchArray(SQLITE3_ASSOC)) {
+    $history[] = $hRow;
+  }
+  $history = array_reverse($history); // Oldest first
+
+  $ans = openai_answer($q, 'AUTO', $history);
   if (!$ans['ok']) {
     $err = $ans['error'] ?? 'AI error';
     $stmt = $db->prepare("INSERT INTO conversation_messages(conversation_id,role,text,lang) VALUES(:c,'assistant',:t,'AUTO')");
