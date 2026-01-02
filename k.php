@@ -135,7 +135,7 @@ function render_reset(?string $err = null): void
 function render_home(): void
 {
   global $CONFIG;
-  $version = $CONFIG['app']['version'] ?? 'v1.0.7';
+  $version = $CONFIG['app']['version'] ?? 'v1.0.2';
   $u = current_user();
   $username = $u ? h($u['username']) : 'OFFLINE';
   $cloudStatus = $u ? 'CONNECTED' : 'DISCONNECTED';
@@ -642,8 +642,7 @@ function render_home(): void
       <div id="status-display">
         <div class="status-row top">
           <span
-            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?>
-            (Project K)</span>
+            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?></span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
@@ -752,26 +751,22 @@ function render_home(): void
       function speakWelcome() {
         if (!("speechSynthesis" in window)) return;
         const hour = new Date().getHours();
-        let greeting = "Good morning. Kelion System Online.";
-        if (hour >= 12 && hour < 18) greeting = "Good afternoon. Kelion System Online.";
-        else if (hour >= 18 && hour < 22) greeting = "Good evening. Kelion System Online.";
-        else if (hour >= 22 || hour < 5) greeting = "Good night. Kelion System Online.";
+        let greeting = "Good morning";
+        if (hour >= 12 && hour < 18) greeting = "Good afternoon";
+        else if (hour >= 18 && hour < 22) greeting = "Good evening";
+        else if (hour >= 22 || hour < 5) greeting = "Good night";
 
-        // Sync with Hologram
-        if (window.hologram) {
-          window.hologram.speak(greeting);
-          window.hologram.intensify();
-        }
-
-        const u = new SpeechSynthesisUtterance(greeting);
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(greeting + ". Welcome to KELION AI.");
+        u.lang = "en-GB";
         u.rate = 0.9;
         u.pitch = 0.8;
 
-        u.onend = () => {
-          if (window.hologram) window.hologram.calm();
-        };
-
-        window.speechSynthesis.speak(u);
+        if (window.hologram) {
+          u.onstart = () => window.hologram.speak();
+          u.onend = () => window.hologram.calm();
+        }
+        speechSynthesis.speak(u);
       }
 
       // User login state from PHP
@@ -790,33 +785,20 @@ function render_home(): void
             // Wait for model to load, then activate based on login state
             setTimeout(() => {
               if (window.hologram) {
-                // UNIVERSAL AUDIO UNLOCK (Requirement: Active from Sec 0 interaction)
-                const unlockAudio = async () => {
-                  if (window.hologram.audioCtx && window.hologram.audioCtx.state === 'suspended') {
-                    await window.hologram.audioCtx.resume();
-                    console.log("Audio System: UNLOCKED");
-                  }
-                };
-                document.addEventListener('click', unlockAudio, { once: true });
-                document.addEventListener('touchstart', unlockAudio, { once: true });
-                document.addEventListener('keydown', unlockAudio, { once: true });
-
-                // Trigger Greeting (Visual + Audio attempt)
-                speakWelcome();
-
                 if (isLoggedIn) {
+                  // User is logged in - activate eyes and full mode
                   window.hologram.activateFullMode();
                   console.log("User logged in: Hologram FULLY ACTIVATED");
                 } else {
-                  // Even if not logged in, show full glory (Softul Cumpărat)
-                  window.hologram.activateFullMode();
-                  console.log("Guest mode: Hologram Active");
+                  // User not logged in - eyes dim
+                  window.hologram.deactivateEyes();
+                  console.log("User not logged in: Eyes deactivated");
                 }
               }
             }, 2000); // Wait for GLB to load
           }
           // Play welcome after a brief delay
-
+          setTimeout(speakWelcome, 500);
         }, 1000);
       }, 2500);
     </script>
