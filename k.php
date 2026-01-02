@@ -642,7 +642,7 @@ function render_home(): void
       <div id="status-display">
         <div class="status-row top">
           <span
-            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?></span>
+            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)">v1.0.7</span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
@@ -751,22 +751,26 @@ function render_home(): void
       function speakWelcome() {
         if (!("speechSynthesis" in window)) return;
         const hour = new Date().getHours();
-        let greeting = "Good morning";
-        if (hour >= 12 && hour < 18) greeting = "Good afternoon";
-        else if (hour >= 18 && hour < 22) greeting = "Good evening";
-        else if (hour >= 22 || hour < 5) greeting = "Good night";
+        let greeting = "Good morning. Kelion System Online.";
+        if (hour >= 12 && hour < 18) greeting = "Good afternoon. Kelion System Online.";
+        else if (hour >= 18 && hour < 22) greeting = "Good evening. Kelion System Online.";
+        else if (hour >= 22 || hour < 5) greeting = "Good night. Kelion System Online.";
 
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(greeting + ". Welcome to KELION AI.");
-        u.lang = "en-GB";
+        // Sync with Hologram
+        if (window.hologram) {
+          window.hologram.speak(greeting);
+          window.hologram.intensify();
+        }
+
+        const u = new SpeechSynthesisUtterance(greeting);
         u.rate = 0.9;
         u.pitch = 0.8;
 
-        if (window.hologram) {
-          u.onstart = () => window.hologram.speak();
-          u.onend = () => window.hologram.calm();
-        }
-        speechSynthesis.speak(u);
+        u.onend = () => {
+          if (window.hologram) window.hologram.calm();
+        };
+
+        window.speechSynthesis.speak(u);
       }
 
       // User login state from PHP
