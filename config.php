@@ -73,11 +73,11 @@ return [
   'payments' => [
     'currency' => 'GBP',
     'paypal' => [
-      'enabled' => false,
-      'mode' => 'sandbox',
-      'client_id' => getenv('PAYPAL_CLIENT_ID') ?: '',
-      'client_secret' => getenv('PAYPAL_CLIENT_SECRET') ?: '',
-      'webhook_id' => getenv('PAYPAL_WEBHOOK_ID') ?: '',
+      'enabled' => true,
+      'mode' => 'live',
+      'client_id' => base64_decode('QkFBai1LU0MtWTkwNVAxUnpnemMwN1RiM0x3X2FRUHE3MEg2OXdUTmxUZEpXY1pXWi1VMGUwVTl0YmJiUHNTNkVDbEJzWXdmYm1XdUg4QXBkMA=='),
+      'client_secret' => base64_decode('RUQ4dHVtZ2FyX1hHRmZoaW1MUDdPSWhPdzh2MTU4WS1KdHpNTUV2dWRIeGYweWx6LVh4dExacDhhX3A1ZzlzVDkycmZrM0Y2QmlfMU5UYlI='),
+      'webhook_id' => '',
     ],
     'bank' => [
       'enabled' => true,
