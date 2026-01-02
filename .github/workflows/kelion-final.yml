@@ -1,4 +1,4 @@
-name: KELION AI – ULTIMATE AUTO DEPLOY
+name: KELION AI – TARGETED DEPLOY
 
 on:
   push:
@@ -12,44 +12,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Tools
-        run: |
-          npm i -g @railway/cli
-          sudo apt-get install jq -y
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
 
-      - name: Auto-Discovery & Deploy
+      - name: Deploy to fearless-art
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: "d63cc3e3-8c6a-4952-862c-feec8fef0e2a"
+          RAILWAY_SERVICE_ID: "e927d567-bd57-4e2b-87c9-ef00d4d015dc"
         run: |
-          echo "🔍 Searching for Railway Project..."
+          echo "🚀 Deploying directly to Project ID: $RAILWAY_PROJECT_ID"
           
-          # Query GraphQL to get Project ID
-          RESPONSE=$(curl -s -X POST \
-            -H "Authorization: Bearer $RAILWAY_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"query": "query { me { projects { edges { node { id name } } } } }"}' \
-            https://backboard.railway.app/graphql/v2)
-
-          echo "Response: $RESPONSE"
-
-          # Extract first Project ID using jq
-          PROJECT_ID=$(echo $RESPONSE | jq -r '.data.me.projects.edges[0].node.id')
-          PROJECT_NAME=$(echo $RESPONSE | jq -r '.data.me.projects.edges[0].node.name')
-
-          if [ "$PROJECT_ID" == "null" ]; then
-            echo "❌ Fatal: Could not find any project associated with this Token."
-            exit 1
-          fi
-
-          echo "✅ FOUND PROJECT: $PROJECT_NAME (ID: $PROJECT_ID)"
+          # Link directly using the ID found in screenshot
+          railway link $RAILWAY_PROJECT_ID
           
-          echo "🔗 Linking..."
-          railway link $PROJECT_ID
-
-          echo "🚀 DEPLOYING..."
-          railway up --detach
+          # Deploy
+          echo "Pushing code..."
+          railway up --service $RAILWAY_SERVICE_ID --detach
 
       - name: Verify
         run: |
+          echo "⏳ Waiting for build..."
           sleep 60
           curl -I https://kelionai.app
