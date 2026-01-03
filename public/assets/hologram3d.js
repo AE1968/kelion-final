@@ -313,33 +313,32 @@ class HologramUnit {
             transparent: false,
             side: THREE.FrontSide,
             emissive: new THREE.Color(0x200020),
-```
             emissiveIntensity: 0.2
         });
     }
 
     playAnim(name) {
-        if(!this.mixer || !this.animations) return;
-        
+        if (!this.mixer || !this.animations) return;
+
         // Find best matching animation from the bought model
         // e.g. "Talking", "Speak", "Listen", "Idle"
         const key = Object.keys(this.animations).find(k => k.toLowerCase().includes(name.toLowerCase()));
-        
+
         if (key && this.animations[key]) {
             if (this.currentAnim === key) return; // Don't restart if same
-            
+
             // Fade out current
-            if(this.currentAnim && this.animations[this.currentAnim]) {
+            if (this.currentAnim && this.animations[this.currentAnim]) {
                 this.animations[this.currentAnim].fadeOut(0.5);
             }
-            
+
             this.animations[key].reset().fadeIn(0.5).play();
             this.currentAnim = key;
             console.log(`Hologram: Playing bought animation '${key}'`);
         } else {
-             console.log(`Hologram: Animation '${name}' not found.Available: `, Object.keys(this.animations));
-             // Fallback to Idle if specific interaction anim missing
-             if(name !== 'Idle') this.playAnim('Idle');
+            console.log(`Hologram: Animation '${name}' not found.Available: `, Object.keys(this.animations));
+            // Fallback to Idle if specific interaction anim missing
+            if (name !== 'Idle') this.playAnim('Idle');
         }
     }
 
@@ -347,13 +346,13 @@ class HologramUnit {
         this.state = 'listening';
         this.baseEmissive = 0.8;
         // Try to play a listening animation if the purchased model has one
-        this.playAnim('listen'); 
+        this.playAnim('listen');
         // If no 'listen' anim found, playAnim will fallback or keep current
-        
+
         // Tilt head slightly if possible (procedural enhancement)
-        if(this.model) {
-             // We can Tween this if we had a tween lib, but direct set for now
-             // logic in update() will handle smooth return
+        if (this.model) {
+            // We can Tween this if we had a tween lib, but direct set for now
+            // logic in update() will handle smooth return
         }
     }
 
@@ -362,16 +361,16 @@ class HologramUnit {
 
         // Update lip sync (analyzes audio and animates mouth)
         this.updateLipSync(delta);
-        
+
         // Procedural Idle / Listening Motion
-        if(this.model && this.state === 'listening') {
-             // Subtle head tilt for listening
-             this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0.2, 0.05);
-             this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0.05, 0.05);
-        } else if(this.model && this.state === 'idle') {
-             // Return to center
-             this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0, 0.05);
-             this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0, 0.05);
+        if (this.model && this.state === 'listening') {
+            // Subtle head tilt for listening
+            this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0.2, 0.05);
+            this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0.05, 0.05);
+        } else if (this.model && this.state === 'idle') {
+            // Return to center
+            this.model.rotation.y = THREE.MathUtils.lerp(this.model.rotation.y, 0, 0.05);
+            this.model.rotation.z = THREE.MathUtils.lerp(this.model.rotation.z, 0, 0.05);
         }
 
         // Render
@@ -542,7 +541,7 @@ class HologramUnit {
     }
 
     // === LIFECYCLE & CLEANUP ===
-    
+
     dispose() {
         console.log("Hologram: Disposing resources...");
         if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
@@ -582,7 +581,7 @@ class HologramUnit {
             this.scene.traverse(n => { if (n.isMesh) remnants++; });
 
             if (remnants > 200) {
-                this.triggerPanic(`EXCESSIVE_REMNANTS: ${ remnants } meshes detected.`);
+                this.triggerPanic(`EXCESSIVE_REMNANTS: ${remnants} meshes detected.`);
             }
 
             if (this.audioCtx && this.audioCtx.state === 'closed') {
@@ -640,7 +639,7 @@ class HologramUnit {
         u.pitch = (emotion === 'calm') ? 0.7 : 0.85;
 
         u.onstart = () => {
-            this.speak(text); 
+            this.speak(text);
             if (emotion === 'energetic') this.intensify(2.5);
             else if (emotion === 'calm') this.intensify(0.6);
             else this.intensify(1.5);
@@ -674,11 +673,11 @@ class HologramUnit {
 
     enableAudioInteraction() {
         const unlock = async () => {
-             if (this.audioCtx && this.audioCtx.state === 'suspended') {
-                 await this.audioCtx.resume();
-             }
+            if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                await this.audioCtx.resume();
+            }
         };
-        document.addEventListener('click', unlock, {once: true});
-        document.addEventListener('touchstart', unlock, {once: true});
+        document.addEventListener('click', unlock, { once: true });
+        document.addEventListener('touchstart', unlock, { once: true });
     }
 }

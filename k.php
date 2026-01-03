@@ -135,7 +135,7 @@ function render_reset(?string $err = null): void
 function render_home(): void
 {
   global $CONFIG;
-  $version = $CONFIG['app']['version'] ?? 'v1.0.2';
+  $version = explode(' ', $CONFIG['app']['version'] ?? 'v1.0.7')[0];
   $u = current_user();
   $username = $u ? h($u['username']) : 'OFFLINE';
   $cloudStatus = $u ? 'CONNECTED' : 'DISCONNECTED';
@@ -174,6 +174,59 @@ function render_home(): void
         --panel: rgba(0, 15, 30, 0.95);
         --border: rgba(0, 243, 255, 0.35);
         --glow: 0 0 20px rgba(0, 243, 255, 0.25);
+      }
+
+      /* System Panic Mode - Red Alert */
+      body.system-panic {
+        --cyan: #ff0044 !important;
+        --border: rgba(255, 0, 68, 0.5) !important;
+        --glow: 0 0 30px rgba(255, 0, 0, 0.5) !important;
+      }
+
+      body.system-panic::before {
+        background: radial-gradient(circle at 50% 50%, rgba(255, 0, 0, 0.2) 0%, transparent 60%) !important;
+        animation: panicPulse 0.5s ease-in-out infinite !important;
+      }
+
+      @keyframes panicPulse {
+
+        0%,
+        100% {
+          opacity: 0.8;
+        }
+
+        50% {
+          opacity: 1;
+        }
+      }
+
+      #watchdog-alert {
+        display: none;
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 0, 0, 0.9);
+        color: #fff;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 14px;
+        z-index: 10000;
+        box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+        animation: glitchAlert 0.3s ease-in-out infinite;
+      }
+
+      @keyframes glitchAlert {
+
+        0%,
+        100% {
+          transform: translateX(-50%) skewX(0deg);
+        }
+
+        50% {
+          transform: translateX(-50%) skewX(-1deg);
+        }
       }
 
       * {
@@ -627,6 +680,9 @@ function render_home(): void
 
   <body>
 
+    <!-- Watchdog Alert Box -->
+    <div id="watchdog-alert"></div>
+
     <!-- Welcome Overlay with Auto-Enter -->
     <div id="welcomeOverlay">
       <div class="k-logo">K</div>
@@ -642,7 +698,7 @@ function render_home(): void
       <div id="status-display">
         <div class="status-row top">
           <span
-            style="color:var(--neon-blue); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--neon-blue)"><?= h($version) ?></span>
+            style="color:var(--cyan); margin-right:15px; font-weight:bold; text-shadow:0 0 5px var(--cyan)"><?= h($version) ?></span>
           <span>USER: <span class="stat-val">
               <?= $username ?>
             </span></span>
@@ -784,25 +840,25 @@ function render_home(): void
 
             // Wait for 'onReady' callback from Hologram (Sync fix)
             window.hologram.onReady = () => {
-               // Activate internal systems
-               window.hologram.enableAudioInteraction();
-               window.hologram.activateFullMode();
-               window.hologram.startWatchdog();
+              // Activate internal systems
+              window.hologram.enableAudioInteraction();
+              window.hologram.activateFullMode();
+              window.hologram.startWatchdog();
 
-               // Handle redirect AFTER greeting sequence ends
-               window.hologram.onSpeechEnd = () => {
-                   console.log("Greeting sequence finished. Preparing for authentication...");
-                   setTimeout(() => {
-                        if (!isLoggedIn) {
-                            window.location.href = 'k.php?r=login';
-                        }
-                   }, 2000);
-               };
+              // Handle redirect AFTER greeting sequence ends
+              window.hologram.onSpeechEnd = () => {
+                console.log("Greeting sequence finished. Preparing for authentication...");
+                setTimeout(() => {
+                  if (!isLoggedIn) {
+                    window.location.href = 'k.php?r=login';
+                  }
+                }, 2000);
+              };
 
-               // Execute Greeting Routine (Time-Aware: Morning, Noon, or Evening)
-               setTimeout(() => {
-                 window.hologram.routineGreet();
-               }, 500);
+              // Execute Greeting Routine (Time-Aware: Morning, Noon, or Evening)
+              setTimeout(() => {
+                window.hologram.routineGreet();
+              }, 500);
             };
           }
         }, 1000);
