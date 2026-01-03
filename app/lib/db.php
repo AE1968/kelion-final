@@ -135,6 +135,43 @@ function db_init(): void
     );
   ');
 
+  // Visitors tracking table with complete details
+  $db->exec('
+    CREATE TABLE IF NOT EXISTS visitors(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip_address TEXT NOT NULL,
+      ip_hash TEXT,
+      country TEXT,
+      country_code TEXT,
+      city TEXT,
+      region TEXT,
+      timezone TEXT,
+      isp TEXT,
+      user_agent TEXT,
+      browser TEXT,
+      browser_version TEXT,
+      os TEXT,
+      os_version TEXT,
+      device_type TEXT,
+      screen_resolution TEXT,
+      referrer TEXT,
+      landing_page TEXT,
+      page_views INTEGER DEFAULT 1,
+      session_duration INTEGER,
+      user_id INTEGER,
+      is_bot INTEGER DEFAULT 0,
+      visit_date DATE NOT NULL,
+      first_visit_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_activity_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+  ');
+
+  // Index for fast queries
+  $db->exec('CREATE INDEX IF NOT EXISTS idx_visitors_date ON visitors(visit_date);');
+  $db->exec('CREATE INDEX IF NOT EXISTS idx_visitors_country ON visitors(country_code);');
+  $db->exec('CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip_address);');
+
   db_migrate_columns();
   db_seed();
 }

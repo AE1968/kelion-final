@@ -10,6 +10,7 @@ require __DIR__ . '/app/views/layout.php';
 
 $r = $_GET['r'] ?? 'home';
 traffic_log('view', $r);
+track_visitor();
 
 function require_policy_consent(): void
 {
@@ -1380,42 +1381,89 @@ function render_vault_view(int $id): void
   page_footer();
 }
 
-function render_admin(?string $msg = null): void
+function render_admin(?string $msg = null, ?string $err = null): void
 {
   require_admin();
   page_header('Admin');
 
   $db = db();
+
+  // Stats
+  $totalUsers = (int) $db->querySingle("SELECT COUNT(*) FROM users");
+  $activeSubs = (int) $db->querySingle("SELECT COUNT(*) FROM subscriptions WHERE status='active'");
+  $events24 = (int) $db->querySingle("SELECT COUNT(*) FROM traffic_events WHERE created_at >= datetime('now','-1 day')");
+  $totalConversations = (int) $db->querySingle("SELECT COUNT(*) FROM conversations");
+  $pendingPayments = (int) $db->querySingle("SELECT COUNT(*) FROM payments WHERE status='pending'");
+
+  // Users with status
   $users = [];
-  $res = $db->query("SELECT id,username,role,email,last_login_at,created_at FROM users ORDER BY id DESC LIMIT 50");
+  $res = $db->query("SELECT id,username,role,email,status,last_login_at,created_at FROM users ORDER BY id DESC LIMIT 100");
   while ($r = $res->fetchArray(SQLITE3_ASSOC))
     $users[] = $r;
 
-  $activeSubs = (int) $db->querySingle("SELECT COUNT(*) FROM subscriptions WHERE status='active'");
-  $events24 = (int) $db->querySingle("SELECT COUNT(*) FROM traffic_events WHERE created_at >= datetime('now','-1 day')");
+  // Recent Payments
+  $payments = [];
+  $res = $db->query("SELECT p.*, u.username FROM payments p LEFT JOIN users u ON p.user_id=u.id ORDER BY p.id DESC LIMIT 20");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $payments[] = $r;
 
-  echo '<div class="wrap"><div class="grid">';
+  echo '<div class="wrap">';
+
+  echo '<div class="card" style="margin-bottom:20px;padding:15px">';
+  echo '<div class="row" style="gap:10px;flex-wrap:wrap">';
+  echo '<a href="k.php?r=admin" class="btn btn2">📊 Dashboard</a>';
+  echo '<a href="k.php?r=admin_users" class="btn">👥 Users</a>';
+  echo '<a href="k.php?r=admin_visitors" class="btn">🌍 Visitors</a>';
+  echo '<a href="k.php?r=admin_payments" class="btn">💳 Payments</a>';
+  echo '<a href="k.php?r=admin_conversations" class="btn">💬 Conversations</a>';
+  echo '<a href="k.php?r=admin_logs" class="btn">📋 Logs</a>';
+  echo '<a href="k.php?r=admin_export" class="btn">📤 Export</a>';
+  echo '</div>';
+  echo '</div>';
+
+  echo '<div class="grid">';
+
+  // Left Column - Stats & Quick Actions
   echo '<div class="card">';
-  echo '<h2>Admin Dashboard</h2>';
+  echo '<h2>📊 Admin Dashboard</h2>';
   if ($msg)
-    echo '<div class="ok">' . h($msg) . '</div>';
-  echo '<div class="mut">Traffic (last 24h): <b>' . $events24 . '</b> • Active subs: <b>' . $activeSubs . '</b></div>';
-  echo '<div style="height:12px"></div>';
+    echo '<div class="ok">' . h($msg) . '</div><div style="height:8px"></div>';
+  if ($err)
+    echo '<div class="err">' . h($err) . '</div><div style="height:8px"></div>';
 
-  echo '<h3>Create user</h3>';
+  // Stats Grid
+  echo '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:15px 0">';
+  echo '<div style="background:rgba(0,243,255,0.1);padding:15px;border-radius:8px;text-align:center">';
+  echo '<div style="font-size:2rem;font-weight:700;color:var(--cyan)">' . $totalUsers . '</div>';
+  echo '<div class="mut">Total Users</div></div>';
+  echo '<div style="background:rgba(0,255,100,0.1);padding:15px;border-radius:8px;text-align:center">';
+  echo '<div style="font-size:2rem;font-weight:700;color:#00ff64">' . $activeSubs . '</div>';
+  echo '<div class="mut">Active Subs</div></div>';
+  echo '<div style="background:rgba(255,0,255,0.1);padding:15px;border-radius:8px;text-align:center">';
+  echo '<div style="font-size:2rem;font-weight:700;color:var(--pink)">' . $events24 . '</div>';
+  echo '<div class="mut">Traffic 24h</div></div>';
+  echo '<div style="background:rgba(255,200,0,0.1);padding:15px;border-radius:8px;text-align:center">';
+  echo '<div style="font-size:2rem;font-weight:700;color:#ffc800">' . $pendingPayments . '</div>';
+  echo '<div class="mut">Pending Pay</div></div>';
+  echo '</div>';
+
+  // Quick Create User
+  echo '<h3>➕ Create User</h3>';
   echo '<form method="post" action="k.php?r=admin_create_user">';
   echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
-  echo '<div class="row"><div><label class="mut">Username</label><input name="username" required></div>';
-  echo '<div><label class="mut">Password</label><input name="password" type="password" required></div></div>';
+  echo '<div class="row"><div style="flex:1"><label class="mut">Username</label><input name="username" required></div>';
+  echo '<div style="flex:1"><label class="mut">Password</label><input name="password" type="password" required></div></div>';
   echo '<div style="height:10px"></div>';
-  echo '<div class="row"><div><label class="mut">Role</label>
+  echo '<div class="row"><div style="flex:1"><label class="mut">Role</label>
         <select name="role"><option>user</option><option>admin</option><option>demo</option></select></div>
-        <div><label class="mut">Email (optional)</label><input name="email" type="email"></div></div>';
-  echo '<div style="height:12px"></div><button class="btn btn2" type="submit">Create</button>';
+        <div style="flex:1"><label class="mut">Email</label><input name="email" type="email"></div></div>';
+  echo '<div style="height:12px"></div><button class="btn btn2" type="submit">Create User</button>';
   echo '</form>';
 
-  echo '<hr style="border:0;border-top:1px solid rgba(255,255,255,.10);margin:14px 0">';
-  echo '<h3>Manual: confirm bank payment</h3>';
+  echo '<hr style="border:0;border-top:1px solid rgba(255,255,255,.10);margin:20px 0">';
+
+  // Quick Bank Payment Confirm
+  echo '<h3>💰 Confirm Bank Payment</h3>';
   echo '<form method="post" action="k.php?r=admin_confirm_bank">';
   echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
   echo '<label class="mut">Reference code</label><input name="ref" placeholder="KEL-XXXXXX" required>';
@@ -1424,29 +1472,43 @@ function render_admin(?string $msg = null): void
 
   echo '</div>';
 
+  // Right Column - Users Table
   echo '<div class="card">';
-  echo '<h2>Users</h2><div class="mut">Top 50</div><div style="height:10px"></div>';
-  echo '<div style="overflow:auto;border:1px solid rgba(255,255,255,.10);border-radius:14px;">';
-  echo '<table style="width:100%;border-collapse:collapse">';
-  echo '<thead><tr class="mut"><th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.10)">ID</th>
-        <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.10)">User</th>
-        <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.10)">Role</th>
-        <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.10)">Email</th>
-        <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.10)">Last login</th></tr></thead><tbody>';
+  echo '<h2>👥 Users <span class="mut" style="font-size:0.8rem">(Top 100)</span></h2>';
+  echo '<div style="overflow:auto;max-height:500px;border:1px solid rgba(255,255,255,.10);border-radius:10px;">';
+  echo '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  echo '<thead style="position:sticky;top:0;background:var(--panel)"><tr class="mut">
+        <th style="text-align:left;padding:10px">ID</th>
+        <th style="text-align:left;padding:10px">User</th>
+        <th style="text-align:left;padding:10px">Role</th>
+        <th style="text-align:left;padding:10px">Status</th>
+        <th style="text-align:left;padding:10px">Last Login</th>
+        <th style="text-align:center;padding:10px">Actions</th></tr></thead><tbody>';
   foreach ($users as $u) {
-    echo '<tr><td style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)">' . (int) $u['id'] . '</td>
-          <td style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)">' . h($u['username']) . '</td>
-          <td style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)"><span class="pill">' . h($u['role']) . '</span></td>
-          <td style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)">' . h((string) $u['email']) . '</td>
-          <td style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)"><span class="mut">' . h((string) $u['last_login_at']) . '</span></td></tr>';
+    $statusClass = ($u['status'] ?? 'active') === 'active' ? 'color:#00ff64' : 'color:#ff4444';
+    echo '<tr>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06)">' . (int) $u['id'] . '</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06)">' . h($u['username']) . '</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06)"><span class="pill">' . h($u['role']) . '</span></td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06);' . $statusClass . '">' . h($u['status'] ?? 'active') . '</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06)" class="mut">' . h((string) ($u['last_login_at'] ?? '-')) . '</td>
+          <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center">
+            <a href="k.php?r=admin_edit_user&id=' . (int) $u['id'] . '" title="Edit" style="margin:0 3px">✏️</a>
+            <a href="k.php?r=admin_reset_pw&id=' . (int) $u['id'] . '" title="Reset Password" style="margin:0 3px">🔑</a>
+            <a href="k.php?r=admin_toggle_ban&id=' . (int) $u['id'] . '&csrf=' . h(csrf_token()) . '" title="Ban/Unban" style="margin:0 3px">' . (($u['status'] ?? 'active') === 'active' ? '🚫' : '✅') . '</a>
+            <a href="k.php?r=admin_user_conversations&id=' . (int) $u['id'] . '" title="View Conversations" style="margin:0 3px">💬</a>
+            ' . ((int) $u['id'] !== 1 ? '<a href="k.php?r=admin_delete_user&id=' . (int) $u['id'] . '" title="Delete" onclick="return confirm(\'Delete this user permanently?\')" style="margin:0 3px">🗑️</a>' : '') . '
+          </td></tr>';
   }
   echo '</tbody></table></div>';
-  echo '<div style="height:12px"></div><a class="btn" href="k.php?r=app" style="display:inline-block;text-align:center">Back to App</a>';
+  echo '<div style="height:12px"></div>';
+  echo '<a class="btn" href="k.php?r=app">Back to App</a>';
   echo '</div>';
 
   echo '</div></div>';
   page_footer();
 }
+
 
 
 
@@ -2086,6 +2148,501 @@ if ($r === 'admin_confirm_bank' && $_SERVER['REQUEST_METHOD'] === 'POST') {
   $stmt->execute();
 
   render_admin("Payment confirmed and subscription activated for " . $ref . ".");
+  exit;
+}
+
+// ==================== NEW ADMIN ROUTES ====================
+
+// Edit User Page
+if ($r === 'admin_edit_user') {
+  require_admin();
+  $id = (int) ($_GET['id'] ?? 0);
+  $db = db();
+  $user = $db->querySingle("SELECT * FROM users WHERE id=" . $id, true);
+  if (!$user) {
+    render_admin(null, "User not found.");
+    exit;
+  }
+
+  page_header('Edit User');
+  echo '<div class="wrap"><div class="card" style="max-width:600px;margin:0 auto">';
+  echo '<h2>✏️ Edit User: ' . h($user['username']) . '</h2>';
+  echo '<form method="post" action="k.php?r=admin_edit_user_post">';
+  echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
+  echo '<input type="hidden" name="id" value="' . $id . '">';
+  echo '<label class="mut">Username</label><input name="username" value="' . h($user['username']) . '" required>';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Email</label><input name="email" type="email" value="' . h($user['email'] ?? '') . '">';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Role</label><select name="role">';
+  foreach (['user', 'admin', 'demo'] as $role) {
+    echo '<option' . ($user['role'] === $role ? ' selected' : '') . '>' . $role . '</option>';
+  }
+  echo '</select>';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Status</label><select name="status">';
+  foreach (['active', 'suspended', 'banned'] as $status) {
+    echo '<option' . (($user['status'] ?? 'active') === $status ? ' selected' : '') . '>' . $status . '</option>';
+  }
+  echo '</select>';
+  echo '<div style="height:20px"></div>';
+  echo '<button class="btn btn2" type="submit">Save Changes</button>';
+  echo ' <a href="k.php?r=admin" class="btn">Cancel</a>';
+  echo '</form></div></div>';
+  page_footer();
+  exit;
+}
+
+// Admin Users List
+if ($r === 'admin_users') {
+  render_admin(); // Already contains user list
+  exit;
+}
+
+// LIVE VISITORS DASHBOARD
+if ($r === 'admin_visitors') {
+  require_admin();
+  $db = db();
+
+  $visitors = [];
+  $res = $db->query("SELECT * FROM visitors ORDER BY last_activity_at DESC LIMIT 200");
+  while ($v = $res->fetchArray(SQLITE3_ASSOC))
+    $visitors[] = $v;
+
+  page_header('Live Visitors');
+
+  echo '<div class="wrap">';
+  echo '<div class="card" style="margin-bottom:20px;padding:15px">';
+  echo '<div class="row" style="gap:10px;flex-wrap:wrap">';
+  echo '<a href="k.php?r=admin" class="btn">📊 Dashboard</a>';
+  echo '<a href="k.php?r=admin_users" class="btn">👥 Users</a>';
+  echo '<a href="k.php?r=admin_visitors" class="btn btn2">🌍 Visitors</a>';
+  echo '<a href="k.php?r=admin_payments" class="btn">💳 Payments</a>';
+  echo '<a href="k.php?r=admin_conversations" class="btn">💬 Conversations</a>';
+  echo '<a href="k.php?r=admin_logs" class="btn">📋 Logs</a>';
+  echo '</div></div>';
+
+  echo '<div class="card">';
+  echo '<h2>🌍 Live Visitors Table</h2>';
+  echo '<div class="mut" style="margin-bottom:15px">Indexată pe Dată, Țară, IP și Detalii Complete</div>';
+
+  echo '<div style="overflow:auto;max-height:600px;border:1px solid var(--border);border-radius:10px">';
+  echo '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  echo '<thead style="position:sticky;top:0;background:var(--panel);z-index:10"><tr class="mut">
+        <th style="padding:12px;text-align:left">Visitor / IP</th>
+        <th style="padding:12px;text-align:left">Location</th>
+        <th style="padding:12px;text-align:left">System</th>
+        <th style="padding:12px;text-align:left">Views</th>
+        <th style="padding:12px;text-align:left">Activity</th>
+        <th style="padding:12px;text-align:left">Date</th></tr></thead><tbody>';
+
+  foreach ($visitors as $v) {
+    $cc = $v['country_code'] ?? '??';
+    $flag = '🌍';
+    if ($cc === 'RO')
+      $flag = '🇷🇴';
+    elseif ($cc === 'GB')
+      $flag = '🇬🇧';
+    elseif ($cc === 'US')
+      $flag = '🇺🇸';
+    elseif ($cc === 'DE')
+      $flag = '🇩🇪';
+    elseif ($cc === 'FR')
+      $flag = '🇫🇷';
+
+    $isBot = $v['is_bot'] ? '<span class="pill" style="background:#ff4444;margin-left:5px">BOT</span>' : '';
+
+    echo '<tr style="border-top:1px solid rgba(255,255,255,.05)">';
+    echo '<td style="padding:10px"><b>' . h($v['ip_address']) . '</b>' . $isBot . '<div class="mut" style="font-size:0.7rem">' . h(substr($v['user_agent'], 0, 50)) . '...</div></td>';
+    echo '<td style="padding:10px">' . $flag . ' ' . h($v['country'] ?? 'Unknown') . '<div class="mut" style="font-size:0.7rem">' . h($v['city'] ?? '') . ' (' . h($v['isp'] ?? '') . ')</div></td>';
+    echo '<td style="padding:10px">' . h($v['browser']) . ' on ' . h($v['os']) . '<div class="mut" style="font-size:0.7rem">' . h($v['device_type'] ?? 'Desktop') . '</div></td>';
+    echo '<td style="padding:10px;text-align:center">' . (int) $v['page_views'] . '</td>';
+    echo '<td style="padding:10px"><span class="ok" style="font-size:0.75rem">' . h($v['last_activity_at']) . '</span></td>';
+    echo '<td style="padding:10px" class="mut">' . h($v['visit_date']) . '</td>';
+    echo '</tr>';
+  }
+
+  if (empty($visitors))
+    echo '<tr><td colspan="6" style="padding:20px;text-align:center" class="mut">No visitors logged yet.</td></tr>';
+
+  echo '</tbody></table></div>';
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// Edit User POST
+if ($r === 'admin_edit_user_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  require_admin();
+  csrf_check();
+  $id = (int) ($_POST['id'] ?? 0);
+  $username = trim((string) ($_POST['username'] ?? ''));
+  $email = trim((string) ($_POST['email'] ?? ''));
+  $role = (string) ($_POST['role'] ?? 'user');
+  $status = (string) ($_POST['status'] ?? 'active');
+
+  if ($id < 1 || $username === '') {
+    render_admin(null, "Invalid data.");
+    exit;
+  }
+  if (!in_array($role, ['user', 'admin', 'demo'], true))
+    $role = 'user';
+  if (!in_array($status, ['active', 'suspended', 'banned'], true))
+    $status = 'active';
+
+  $stmt = db()->prepare("UPDATE users SET username=:u, email=:e, role=:r, status=:s WHERE id=:i");
+  $stmt->bindValue(':u', $username, SQLITE3_TEXT);
+  $stmt->bindValue(':e', $email === '' ? null : $email, $email === '' ? SQLITE3_NULL : SQLITE3_TEXT);
+  $stmt->bindValue(':r', $role, SQLITE3_TEXT);
+  $stmt->bindValue(':s', $status, SQLITE3_TEXT);
+  $stmt->bindValue(':i', $id, SQLITE3_INTEGER);
+  $stmt->execute();
+
+  render_admin("User #$id updated successfully.");
+  exit;
+}
+
+// Reset Password Page
+if ($r === 'admin_reset_pw') {
+  require_admin();
+  $id = (int) ($_GET['id'] ?? 0);
+  $db = db();
+  $user = $db->querySingle("SELECT username FROM users WHERE id=" . $id, true);
+  if (!$user) {
+    render_admin(null, "User not found.");
+    exit;
+  }
+
+  page_header('Reset Password');
+  echo '<div class="wrap"><div class="card" style="max-width:500px;margin:0 auto">';
+  echo '<h2>🔑 Reset Password</h2>';
+  echo '<p class="mut">Reset password for: <b>' . h($user['username']) . '</b></p>';
+  echo '<form method="post" action="k.php?r=admin_reset_pw_post">';
+  echo '<input type="hidden" name="csrf" value="' . h(csrf_token()) . '">';
+  echo '<input type="hidden" name="id" value="' . $id . '">';
+  echo '<label class="mut">New Password</label><input name="password" type="password" required minlength="6">';
+  echo '<div style="height:10px"></div>';
+  echo '<label class="mut">Confirm Password</label><input name="password2" type="password" required>';
+  echo '<div style="height:20px"></div>';
+  echo '<button class="btn btn2" type="submit">Reset Password</button>';
+  echo ' <a href="k.php?r=admin" class="btn">Cancel</a>';
+  echo '</form></div></div>';
+  page_footer();
+  exit;
+}
+
+// Reset Password POST
+if ($r === 'admin_reset_pw_post' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+  require_admin();
+  csrf_check();
+  $id = (int) ($_POST['id'] ?? 0);
+  $pw = (string) ($_POST['password'] ?? '');
+  $pw2 = (string) ($_POST['password2'] ?? '');
+
+  if ($id < 1 || strlen($pw) < 6) {
+    render_admin(null, "Password must be at least 6 characters.");
+    exit;
+  }
+  if ($pw !== $pw2) {
+    render_admin(null, "Passwords do not match.");
+    exit;
+  }
+
+  $hash = password_hash($pw, PASSWORD_DEFAULT);
+  $stmt = db()->prepare("UPDATE users SET passhash=:h WHERE id=:i");
+  $stmt->bindValue(':h', $hash, SQLITE3_TEXT);
+  $stmt->bindValue(':i', $id, SQLITE3_INTEGER);
+  $stmt->execute();
+
+  render_admin("Password reset successfully for user #$id.");
+  exit;
+}
+
+// Toggle Ban/Unban
+if ($r === 'admin_toggle_ban') {
+  require_admin();
+  csrf_check();
+  $id = (int) ($_GET['id'] ?? 0);
+  if ($id < 1 || $id === 1) {
+    render_admin(null, "Cannot modify this user.");
+    exit;
+  }
+
+  $db = db();
+  $current = $db->querySingle("SELECT status FROM users WHERE id=" . $id);
+  $newStatus = ($current === 'active') ? 'banned' : 'active';
+
+  $stmt = $db->prepare("UPDATE users SET status=:s WHERE id=:i");
+  $stmt->bindValue(':s', $newStatus, SQLITE3_TEXT);
+  $stmt->bindValue(':i', $id, SQLITE3_INTEGER);
+  $stmt->execute();
+
+  render_admin("User #$id is now: $newStatus");
+  exit;
+}
+
+// Delete User
+if ($r === 'admin_delete_user') {
+  require_admin();
+  $id = (int) ($_GET['id'] ?? 0);
+  if ($id < 1 || $id === 1) {
+    render_admin(null, "Cannot delete this user.");
+    exit;
+  }
+
+  $db = db();
+  // Delete user data
+  $db->exec("DELETE FROM conversation_messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id=" . $id . ")");
+  $db->exec("DELETE FROM conversations WHERE user_id=" . $id);
+  $db->exec("DELETE FROM subscriptions WHERE user_id=" . $id);
+  $db->exec("DELETE FROM payments WHERE user_id=" . $id);
+  $db->exec("DELETE FROM users WHERE id=" . $id);
+
+  render_admin("User #$id deleted permanently.");
+  exit;
+}
+
+// View User Conversations
+if ($r === 'admin_user_conversations') {
+  require_admin();
+  $id = (int) ($_GET['id'] ?? 0);
+  $db = db();
+  $user = $db->querySingle("SELECT username FROM users WHERE id=" . $id, true);
+  if (!$user) {
+    render_admin(null, "User not found.");
+    exit;
+  }
+
+  $conversations = [];
+  $res = $db->query("SELECT c.*, (SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=c.id) as msg_count FROM conversations c WHERE c.user_id=" . $id . " ORDER BY c.id DESC LIMIT 50");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $conversations[] = $r;
+
+  page_header('User Conversations');
+  echo '<div class="wrap"><div class="card">';
+  echo '<h2>💬 Conversations: ' . h($user['username']) . '</h2>';
+  echo '<a href="k.php?r=admin" class="btn" style="margin-bottom:15px;display:inline-block">← Back to Admin</a>';
+
+  if (empty($conversations)) {
+    echo '<p class="mut">No conversations found.</p>';
+  } else {
+    foreach ($conversations as $c) {
+      echo '<div style="background:rgba(0,243,255,0.05);border:1px solid var(--border);border-radius:8px;padding:15px;margin-bottom:10px">';
+      echo '<div style="display:flex;justify-content:space-between">';
+      echo '<b>' . h($c['title'] ?? 'Conversation #' . $c['id']) . '</b>';
+      echo '<span class="mut">' . h($c['created_at'] ?? '') . '</span>';
+      echo '</div>';
+      echo '<div class="mut">' . (int) $c['msg_count'] . ' messages</div>';
+      echo '<a href="k.php?r=admin_view_conversation&id=' . (int) $c['id'] . '" class="btn" style="margin-top:10px;padding:6px 12px;font-size:0.75rem">View Messages</a>';
+      echo '</div>';
+    }
+  }
+
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// View Single Conversation
+if ($r === 'admin_view_conversation') {
+  require_admin();
+  $id = (int) ($_GET['id'] ?? 0);
+  $db = db();
+
+  $messages = [];
+  $res = $db->query("SELECT * FROM conversation_messages WHERE conversation_id=" . $id . " ORDER BY id ASC");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $messages[] = $r;
+
+  page_header('View Conversation');
+  echo '<div class="wrap"><div class="card">';
+  echo '<h2>💬 Conversation #' . $id . '</h2>';
+  echo '<a href="javascript:history.back()" class="btn" style="margin-bottom:15px;display:inline-block">← Back</a>';
+
+  echo '<div class="chat" style="max-height:600px">';
+  foreach ($messages as $m) {
+    $isUser = $m['role'] === 'user';
+    echo '<div class="msg ' . ($isUser ? 'user' : 'bot') . '">';
+    echo '<div class="mut" style="font-size:0.7rem;margin-bottom:5px">' . h($m['role']) . ' • ' . h($m['created_at'] ?? '') . '</div>';
+    echo h($m['text']);
+    echo '</div>';
+  }
+  echo '</div>';
+
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// Admin Payments Page
+if ($r === 'admin_payments') {
+  require_admin();
+  $db = db();
+
+  $payments = [];
+  $res = $db->query("SELECT p.*, u.username, pl.name as plan_name FROM payments p LEFT JOIN users u ON p.user_id=u.id LEFT JOIN subscriptions s ON p.subscription_id=s.id LEFT JOIN plans pl ON s.plan_id=pl.id ORDER BY p.id DESC LIMIT 100");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $payments[] = $r;
+
+  page_header('Payments');
+  echo '<div class="wrap"><div class="card">';
+  echo '<h2>💳 All Payments</h2>';
+  echo '<a href="k.php?r=admin" class="btn" style="margin-bottom:15px;display:inline-block">← Back to Dashboard</a>';
+
+  echo '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px">';
+  echo '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  echo '<thead><tr class="mut"><th style="padding:10px;text-align:left">ID</th><th style="padding:10px;text-align:left">User</th><th style="padding:10px;text-align:left">Plan</th><th style="padding:10px;text-align:left">Amount</th><th style="padding:10px;text-align:left">Method</th><th style="padding:10px;text-align:left">Status</th><th style="padding:10px;text-align:left">Reference</th><th style="padding:10px;text-align:left">Date</th></tr></thead><tbody>';
+
+  foreach ($payments as $p) {
+    $statusColor = $p['status'] === 'paid' ? '#00ff64' : ($p['status'] === 'pending' ? '#ffc800' : '#ff4444');
+    echo '<tr>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . (int) $p['id'] . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . h($p['username'] ?? '-') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . h($p['plan_name'] ?? '-') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">£' . number_format((float) $p['amount'], 2) . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . h($p['method']) . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);color:' . $statusColor . '">' . h($p['status']) . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)" class="mut">' . h($p['reference_code'] ?? '-') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)" class="mut">' . h($p['created_at'] ?? '-') . '</td>';
+    echo '</tr>';
+  }
+
+  echo '</tbody></table></div>';
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// Admin All Conversations Page
+if ($r === 'admin_conversations') {
+  require_admin();
+  $db = db();
+
+  $conversations = [];
+  $res = $db->query("SELECT c.*, u.username, (SELECT COUNT(*) FROM conversation_messages WHERE conversation_id=c.id) as msg_count FROM conversations c LEFT JOIN users u ON c.user_id=u.id ORDER BY c.id DESC LIMIT 100");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $conversations[] = $r;
+
+  page_header('All Conversations');
+  echo '<div class="wrap"><div class="card">';
+  echo '<h2>💬 All Conversations</h2>';
+  echo '<a href="k.php?r=admin" class="btn" style="margin-bottom:15px;display:inline-block">← Back to Dashboard</a>';
+
+  echo '<div style="overflow:auto;border:1px solid var(--border);border-radius:10px">';
+  echo '<table style="width:100%;border-collapse:collapse;font-size:0.85rem">';
+  echo '<thead><tr class="mut"><th style="padding:10px;text-align:left">ID</th><th style="padding:10px;text-align:left">User</th><th style="padding:10px;text-align:left">Title</th><th style="padding:10px;text-align:left">Messages</th><th style="padding:10px;text-align:left">Created</th><th style="padding:10px;text-align:center">Actions</th></tr></thead><tbody>';
+
+  foreach ($conversations as $c) {
+    echo '<tr>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . (int) $c['id'] . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . h($c['username'] ?? '-') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . h($c['title'] ?? 'Untitled') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">' . (int) $c['msg_count'] . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06)" class="mut">' . h($c['created_at'] ?? '-') . '</td>';
+    echo '<td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);text-align:center"><a href="k.php?r=admin_view_conversation&id=' . (int) $c['id'] . '">View</a></td>';
+    echo '</tr>';
+  }
+
+  echo '</tbody></table></div>';
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// Admin Logs Page
+if ($r === 'admin_logs') {
+  require_admin();
+  $db = db();
+
+  $traffic = [];
+  $res = $db->query("SELECT * FROM traffic_events ORDER BY id DESC LIMIT 200");
+  while ($r = $res->fetchArray(SQLITE3_ASSOC))
+    $traffic[] = $r;
+
+  // Also show contact form logs
+  $contactLogs = [];
+  $logFile = __DIR__ . '/storage/contact_log.txt';
+  if (file_exists($logFile)) {
+    $lines = array_slice(array_filter(explode("\n", file_get_contents($logFile))), -50);
+    $contactLogs = array_reverse($lines);
+  }
+
+  page_header('System Logs');
+  echo '<div class="wrap"><div class="grid">';
+
+  echo '<div class="card">';
+  echo '<h2>📋 Traffic Events</h2>';
+  echo '<a href="k.php?r=admin" class="btn" style="margin-bottom:15px;display:inline-block">← Back</a>';
+  echo '<div style="overflow:auto;max-height:500px;background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;font-family:monospace;font-size:0.75rem">';
+  foreach ($traffic as $t) {
+    echo '<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)">';
+    echo '<span class="mut">' . h($t['created_at'] ?? '') . '</span> ';
+    echo '<span style="color:var(--cyan)">' . h($t['event_type'] ?? '') . '</span> ';
+    echo h($t['route'] ?? '');
+    echo '</div>';
+  }
+  echo '</div></div>';
+
+  echo '<div class="card">';
+  echo '<h2>📧 Contact Form Logs</h2>';
+  echo '<div style="overflow:auto;max-height:500px;background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;font-family:monospace;font-size:0.7rem;white-space:pre-wrap">';
+  foreach ($contactLogs as $log) {
+    echo h($log) . "\n";
+  }
+  if (empty($contactLogs))
+    echo '<span class="mut">No contact logs yet.</span>';
+  echo '</div></div>';
+
+  echo '</div></div>';
+  page_footer();
+  exit;
+}
+
+// Admin Export Data
+if ($r === 'admin_export') {
+  require_admin();
+
+  $type = $_GET['type'] ?? '';
+  $db = db();
+
+  if ($type === 'users_csv') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="kelion_users_' . date('Y-m-d') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['ID', 'Username', 'Email', 'Role', 'Status', 'Created', 'Last Login']);
+    $res = $db->query("SELECT * FROM users ORDER BY id");
+    while ($r = $res->fetchArray(SQLITE3_ASSOC)) {
+      fputcsv($out, [$r['id'], $r['username'], $r['email'] ?? '', $r['role'], $r['status'] ?? 'active', $r['created_at'], $r['last_login_at'] ?? '']);
+    }
+    fclose($out);
+    exit;
+  }
+
+  if ($type === 'payments_csv') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="kelion_payments_' . date('Y-m-d') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['ID', 'User ID', 'Amount', 'Method', 'Status', 'Reference', 'Created', 'Paid At']);
+    $res = $db->query("SELECT * FROM payments ORDER BY id");
+    while ($r = $res->fetchArray(SQLITE3_ASSOC)) {
+      fputcsv($out, [$r['id'], $r['user_id'], $r['amount'], $r['method'], $r['status'], $r['reference_code'] ?? '', $r['created_at'], $r['paid_at'] ?? '']);
+    }
+    fclose($out);
+    exit;
+  }
+
+  page_header('Export Data');
+  echo '<div class="wrap"><div class="card" style="max-width:600px;margin:0 auto">';
+  echo '<h2>📤 Export Data</h2>';
+  echo '<a href="k.php?r=admin" class="btn" style="margin-bottom:20px;display:inline-block">← Back to Dashboard</a>';
+
+  echo '<div style="display:grid;gap:15px">';
+  echo '<a href="k.php?r=admin_export&type=users_csv" class="btn btn2" style="text-align:center">📥 Export Users (CSV)</a>';
+  echo '<a href="k.php?r=admin_export&type=payments_csv" class="btn btn2" style="text-align:center">📥 Export Payments (CSV)</a>';
+  echo '</div>';
+
+  echo '</div></div>';
+  page_footer();
   exit;
 }
 
