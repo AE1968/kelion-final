@@ -675,6 +675,38 @@ function render_home(): void
           transform: translateX(-100%);
         }
       }
+
+      /* SUBTITLE BAR - Shows spoken text */
+      #subtitle-bar {
+        position: fixed;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 80%;
+        padding: 15px 40px;
+        background: rgba(0, 10, 20, 0.95);
+        border: 1px solid var(--cyan);
+        border-radius: 8px;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 1.1rem;
+        color: var(--cyan);
+        text-align: center;
+        letter-spacing: 1px;
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+        z-index: 9999;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+        pointer-events: none;
+      }
+
+      #subtitle-bar.visible {
+        opacity: 1;
+      }
+
+      #subtitle-bar::before {
+        content: '🔊';
+        margin-right: 15px;
+      }
     </style>
   </head>
 
@@ -727,6 +759,12 @@ function render_home(): void
 
     <!-- Scan Lines -->
     <div class="scan-line"></div>
+
+    <!-- Subtitle Bar for Spoken Text -->
+    <div id="subtitle-bar"></div>
+
+    <!-- Watchdog Alert -->
+    <div id="watchdog-alert"></div>
 
     <!-- Contact Button -->
     <button id="ae-contact-btn"

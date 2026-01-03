@@ -702,21 +702,45 @@ class HologramUnit {
 
     say(text, emotion = 'normal') {
         if (!("speechSynthesis" in window)) return;
+
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = (emotion === 'energetic') ? 1.0 : (emotion === 'calm' ? 0.8 : 0.9);
-        u.pitch = (emotion === 'calm') ? 0.7 : 0.85;
+
+        // Correct speech rates for natural hologram voice
+        // 0.85 is optimal for clear AI speech
+        u.rate = (emotion === 'energetic') ? 0.9 : (emotion === 'calm' ? 0.75 : 0.85);
+        u.pitch = (emotion === 'calm') ? 0.75 : 0.9;
+        u.lang = 'en-GB';
+        u.volume = 1.0;
+
+        // Show subtitle bar
+        const subtitleBar = document.getElementById('subtitle-bar');
+        if (subtitleBar) {
+            subtitleBar.textContent = text;
+            subtitleBar.classList.add('visible');
+        }
 
         u.onstart = () => {
             this.speak(text);
+            this.playAnim('Speak');
             if (emotion === 'energetic') this.intensify(2.5);
             else if (emotion === 'calm') this.intensify(0.6);
             else this.intensify(1.5);
+            console.log("Hologram Speaking:", text);
         };
 
         u.onend = () => {
             this.calm();
+            this.playAnim('Idle');
+            // Hide subtitle bar after short delay
+            setTimeout(() => {
+                if (subtitleBar) subtitleBar.classList.remove('visible');
+            }, 1500);
             if (this.onSpeechEnd) this.onSpeechEnd();
         };
+
         window.speechSynthesis.speak(u);
     }
 
