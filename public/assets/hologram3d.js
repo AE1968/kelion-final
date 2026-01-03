@@ -77,29 +77,30 @@ class HologramUnit {
 
     setupScene() {
         this.scene = new THREE.Scene();
-        // Dark background for reptile hologram
+        // Dark background for hologram display
         this.scene.background = new THREE.Color(0x0a0a15);
 
         // Camera portrait setup
         this.camera = new THREE.PerspectiveCamera(35, this.width / this.height, 0.1, 1000);
         this.camera.position.set(0, 0.1, 1.8);
 
-        // Realistic lighting for skin visibility
-        this.ambientLight = new THREE.AmbientLight(0x00aaff, 0.3);
+        // NATURAL LIGHTING for human skin rendering
+        // Soft ambient for base visibility
+        this.ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         this.scene.add(this.ambientLight);
 
-        // Key light (main frontal) - cyan tint
-        this.frontLight = new THREE.DirectionalLight(0x00ffff, 1.5);
+        // Key light (main frontal) - warm white for natural skin
+        this.frontLight = new THREE.DirectionalLight(0xffeedd, 1.2);
         this.frontLight.position.set(0, 1, 3);
         this.scene.add(this.frontLight);
 
-        // Fill light (softer, from side)
-        this.fillLight = new THREE.DirectionalLight(0x00ccff, 0.8);
+        // Fill light (softer, from side) - slightly cool for depth
+        this.fillLight = new THREE.DirectionalLight(0xddddff, 0.6);
         this.fillLight.position.set(-2, 0.5, 2);
         this.scene.add(this.fillLight);
 
-        // Rim/back light for edge definition
-        this.rimLight = new THREE.PointLight(0xff00ff, 1.0, 15);
+        // Rim/back light - subtle cyan accent for hologram effect
+        this.rimLight = new THREE.PointLight(0x00ffff, 0.5, 15);
         this.rimLight.position.set(2, 1, -1);
         this.scene.add(this.rimLight);
     }
@@ -165,17 +166,10 @@ class HologramUnit {
 
         this.model.traverse(node => {
             if (node.isMesh) {
-                // Keep original textures from the purchased model
-                // Enhance materials for holographic effect
-                if (node.material) {
-                    node.material.transparent = false;
-                    node.material.side = THREE.FrontSide;
-                    // Add subtle emissive glow
-                    if (node.material.emissive) {
-                        node.material.emissive.setHex(0x001122);
-                        node.material.emissiveIntensity = 0.3;
-                    }
-                }
+                // Apply NATURAL HUMAN SKIN color material
+                // instead of keeping alien/holographic textures
+                node.material = this.createHumanSkinMaterial(node.name);
+
                 if (node.morphTargetInfluences) {
                     this.morphMeshes.push(node);
                     console.log("Found Morph Target Mesh:", node.name, "with", node.morphTargetInfluences.length, "targets");
@@ -304,6 +298,53 @@ class HologramUnit {
         this.scene.add(this.model);
         this.mixer = { update: () => { } };
         console.log("Procedural Hologram: ACTIVE (With Mouth).");
+    }
+
+    // NATURAL HUMAN SKIN MATERIAL - Realistic face appearance
+    createHumanSkinMaterial(meshName = '') {
+        const name = meshName.toLowerCase();
+
+        // Eye material - realistic human eyes
+        if (name.includes('eye')) {
+            return new THREE.MeshPhysicalMaterial({
+                color: new THREE.Color(0x4a90a4),  // Blue-gray iris
+                roughness: 0.1,
+                metalness: 0.0,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+                transparent: false,
+                side: THREE.FrontSide,
+                emissive: new THREE.Color(0x112233),
+                emissiveIntensity: 0.2
+            });
+        }
+
+        // Mouth/lip material - natural pink lips
+        if (name.includes('mouth') || name.includes('lip') || name.includes('teeth')) {
+            return new THREE.MeshPhysicalMaterial({
+                color: new THREE.Color(0xcc8888),  // Natural lip pink
+                roughness: 0.4,
+                metalness: 0.0,
+                clearcoat: 0.3,
+                clearcoatRoughness: 0.4,
+                transparent: false,
+                side: THREE.FrontSide
+            });
+        }
+
+        // HUMAN SKIN - Natural Caucasian skin tone
+        return new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color(0xe8b89d),  // Natural skin tone (beige/peach)
+            roughness: 0.55,                    // Slightly rough like real skin
+            metalness: 0.0,                     // No metallic shine
+            clearcoat: 0.15,                    // Subtle skin sheen
+            clearcoatRoughness: 0.6,
+            transparent: false,
+            side: THREE.FrontSide,
+            // Subtle warm undertone glow (subsurface scattering simulation)
+            emissive: new THREE.Color(0x331111),
+            emissiveIntensity: 0.1
+        });
     }
 
     createReptileSkinMaterial(meshName = '') {
