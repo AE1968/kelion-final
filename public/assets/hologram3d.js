@@ -165,11 +165,20 @@ class HologramUnit {
 
         this.model.traverse(node => {
             if (node.isMesh) {
-                // Apply reptile skin material if needed, or keep original textures
-                // node.material = this.createReptileSkinMaterial(node.name);
+                // Keep original textures from the purchased model
+                // Enhance materials for holographic effect
+                if (node.material) {
+                    node.material.transparent = false;
+                    node.material.side = THREE.FrontSide;
+                    // Add subtle emissive glow
+                    if (node.material.emissive) {
+                        node.material.emissive.setHex(0x001122);
+                        node.material.emissiveIntensity = 0.3;
+                    }
+                }
                 if (node.morphTargetInfluences) {
                     this.morphMeshes.push(node);
-                    console.log("Found Morph Target Mesh:", node.name);
+                    console.log("Found Morph Target Mesh:", node.name, "with", node.morphTargetInfluences.length, "targets");
                 }
             }
         });
@@ -195,9 +204,40 @@ class HologramUnit {
         // Try to find mouth parts for lip sync
         this.findMouthComponents();
 
-        // Try playing 'Idle' or first animation
+        // Start Blink animation loop (from purchased model)
+        this.startBlinkLoop();
+
+        // Play Idle or first animation
         this.playAnim('Idle');
-        console.log("Hologram Brain: ACTIVE.");
+
+        // Signal that model is fully loaded
+        this.isLoaded = true;
+        if (this.onReady) this.onReady();
+
+        console.log("Hologram Brain: ACTIVE. Using purchased model animations.");
+    }
+
+    // Auto-blink using the purchased model's Blink animation
+    startBlinkLoop() {
+        if (!this.animations['Blink']) {
+            console.log("Blink animation not found in model.");
+            return;
+        }
+
+        const blinkAction = this.animations['Blink'];
+        blinkAction.setLoop(THREE.LoopOnce);
+        blinkAction.clampWhenFinished = true;
+
+        const doBlink = () => {
+            blinkAction.reset().play();
+            // Random next blink between 2-6 seconds
+            const nextDelay = 2000 + Math.random() * 4000;
+            setTimeout(doBlink, nextDelay);
+        };
+
+        // Start blinking after 1 second
+        setTimeout(doBlink, 1000);
+        console.log("Hologram: Auto-blink loop ACTIVE.");
     }
 
     findMouthComponents() {
@@ -345,14 +385,42 @@ class HologramUnit {
     listen() {
         this.state = 'listening';
         this.baseEmissive = 0.8;
-        // Try to play a listening animation if the purchased model has one
-        this.playAnim('listen');
-        // If no 'listen' anim found, playAnim will fallback or keep current
 
-        // Tilt head slightly if possible (procedural enhancement)
-        if (this.model) {
-            // We can Tween this if we had a tween lib, but direct set for now
-            // logic in update() will handle smooth return
+        // Use the purchased model's look animation for attentive listening
+        // Plays LookLeft or TurnLeft for subtle engagement
+        if (this.animations['LookLeft']) {
+            this.animations['LookLeft'].reset().fadeIn(0.3).play();
+        } else if (this.animations['TurnLeft']) {
+            this.animations['TurnLeft'].reset().fadeIn(0.3).play();
+        }
+        console.log("Hologram: Listening mode ACTIVE.");
+    }
+
+    // Look in a specific direction using purchased animations
+    lookAt(direction) {
+        const dirMap = {
+            'up': 'LookUp',
+            'down': 'LookDown',
+            'left': 'LookLeft',
+            'right': 'LookRight'
+        };
+        const animName = dirMap[direction.toLowerCase()];
+        if (animName && this.animations[animName]) {
+            this.animations[animName].reset().fadeIn(0.3).play();
+        }
+    }
+
+    // Turn head in a specific direction
+    turnHead(direction) {
+        const dirMap = {
+            'up': 'TurnUp',
+            'down': 'TurnDown',
+            'left': 'TurnLeft',
+            'right': 'TurnRight'
+        };
+        const animName = dirMap[direction.toLowerCase()];
+        if (animName && this.animations[animName]) {
+            this.animations[animName].reset().fadeIn(0.3).play();
         }
     }
 
