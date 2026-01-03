@@ -7,7 +7,7 @@ return [
     'timezone' => 'Europe/London',
     'default_ui_lang' => 'English',
     'demo_user' => ['username' => 'demo', 'password' => 'demo'],
-    'admin_seed' => ['username' => 'admin', 'password' => 'admin1234'],
+    'admin_seed' => ['username' => 'admin', 'password' => 'Andrada_1968!'],
   ],
 
   'db' => [
