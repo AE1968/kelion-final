@@ -13,9 +13,10 @@ function page_header(string $title): void
   echo '<link rel="stylesheet" href="' . h(asset('public/assets/style.css')) . '">';
   echo '<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">';
 
-  // Three.js for hologram
+  // Libraries
   echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>';
   echo '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>';
+  echo '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>'; // Charting engine
 
   echo '</head><body>';
 
@@ -33,15 +34,15 @@ function page_header(string $title): void
   // Live Subtitle Display
   echo '<div id="live-subtitle"><span class="speaker"></span><span class="text"></span></div>';
 
-  // Chat Toggle Button (visible only when logged in)
+  // Chat Toggle Button
   if ($u) {
     echo '<button id="chat-toggle-btn" onclick="toggleChat()">💬</button>';
   }
 
-  // Contact Button (visible on all pages)
+  // Contact Button
   echo '<button id="global-contact-btn" onclick="window.location.href=\'k.php?r=home#contact\'">CONTACT</button>';
 
-  // Chat Panel (only for logged in users)
+  // Chat Panel
   if ($u) {
     echo '<div id="chat-panel">';
     echo '<div class="chat-header"><h3>KELION CHAT</h3><span class="chat-timestamp" id="chat-time"></span></div>';
@@ -54,15 +55,18 @@ function page_header(string $title): void
     echo '</div>';
   }
 
-  // Global JavaScript
   echo '<script>
   const CSRF_TOKEN = "' . h($csrfToken) . '";
   const IS_LOGGED_IN = ' . $isLoggedIn . ';
   let chatOpen = false;
   let isRecording = false;
   let recognition = null;
-  
-  // Clock update
+  let miniHoloModel = null;
+  let audioContext = null;
+  let analyser = null;
+  let dataArray = null;
+
+  // Clock
   function pad(n){ return String(n).padStart(2,"0"); }
   function tick(){
     const d = new Date();
@@ -75,17 +79,13 @@ function page_header(string $title): void
     const chatTime = document.getElementById("chat-time"); if(chatTime) chatTime.textContent=t;
   }
   tick(); setInterval(tick, 250);
-  
-  // Toggle Chat Panel
+
   function toggleChat() {
     chatOpen = !chatOpen;
     const panel = document.getElementById("chat-panel");
-    if (panel) {
-      panel.classList.toggle("active", chatOpen);
-    }
+    if (panel) panel.classList.toggle("active", chatOpen);
   }
-  
-  // Show Subtitle
+
   function showSubtitle(speaker, text) {
     const sub = document.getElementById("live-subtitle");
     if (sub) {
@@ -95,65 +95,41 @@ function page_header(string $title): void
       setTimeout(() => sub.classList.remove("visible"), 4000);
     }
   }
-  
-  // Add Message to Chat
+
   function addMessage(text, isUser, lang = "en") {
     const container = document.getElementById("chat-messages");
     if (!container) return;
-    
     const now = new Date();
-    const time = pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
-    
+    const time = pad(now.getHours()) + ":" + pad(now.getMinutes());
     const msg = document.createElement("div");
     msg.className = "chat-msg " + (isUser ? "user-msg" : "bot-msg");
-    msg.innerHTML = text + (lang !== "en" ? "<span class=\"lang-indicator\">" + lang.toUpperCase() + "</span>" : "") + 
-                    "<span class=\"msg-time\">" + time + "</span>";
+    let langTag = lang !== "en" ? `<span class="lang-indicator">${lang.toUpperCase()}</span>` : "";
+    msg.innerHTML = text + langTag + `<span class="msg-time">${time}</span>`;
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
-    
-    // Show as subtitle
     showSubtitle(isUser ? "YOU" : "KELION", text);
   }
-  
-  // Send Message
+
   async function sendMessage() {
     const input = document.getElementById("chat-input");
     if (!input || !input.value.trim()) return;
-    
     const text = input.value.trim();
     input.value = "";
-    
-    // Add user message
     addMessage(text, true);
-    
-    // Show thinking state
-    showSubtitle("KELION", "Processing...");
-    
     try {
       const response = await fetch("k.php?r=api_ask", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "csrf=" + encodeURIComponent(CSRF_TOKEN) + "&q=" + encodeURIComponent(text)
       });
-      
       const data = await response.json();
-      
       if (data.ok) {
         addMessage(data.answer, false, data.lang || "en");
-        
-        // Trigger TTS
-        if (data.auto_voice) {
-          playTTS(data.answer);
-        }
-      } else {
-        addMessage("Error: " + (data.error || "Unknown error"), false);
+        if (data.auto_voice) playTTS(data.answer);
       }
-    } catch (err) {
-      addMessage("Connection error: " + err.message, false);
-    }
+    } catch (err) { console.error(err); }
   }
-  
-  // Play TTS Audio
+
   async function playTTS(text) {
     try {
       const response = await fetch("k.php?r=api_tts", {
@@ -161,158 +137,99 @@ function page_header(string $title): void
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "csrf=" + encodeURIComponent(CSRF_TOKEN) + "&text=" + encodeURIComponent(text)
       });
-      
       if (response.ok) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        connectLipSync(audio);
         audio.play();
       }
-    } catch (err) {
-      console.error("TTS Error:", err);
-    }
+    } catch (err) { console.error(err); }
   }
-  
-  // Voice Recognition
+
+  function connectLipSync(audio) {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (!analyser) {
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+    const source = audioContext.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+  }
+
   function toggleVoice() {
     const btn = document.getElementById("voice-btn");
-    
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      alert("Voice recognition not supported in this browser.");
-      return;
-    }
-    
-    if (isRecording) {
-      // Stop recording
-      if (recognition) recognition.stop();
-      isRecording = false;
-      btn.classList.remove("recording");
-      btn.textContent = "🎤";
-    } else {
-      // Start recording
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = "en-US"; // Will auto-detect language
-      
-      recognition.onstart = function() {
-        isRecording = true;
-        btn.classList.add("recording");
-        btn.textContent = "⏺";
-        showSubtitle("YOU", "Listening...");
-      };
-      
-      recognition.onresult = function(event) {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("STT not supported.");
+    if (isRecording) { recognition.stop(); return; }
+    recognition = new SpeechRecognition();
+    recognition.onstart = () => { isRecording = true; btn.classList.add("recording"); btn.textContent = "⏺"; };
+    recognition.onresult = (e) => { 
+        const transcript = e.results[0][0].transcript;
         document.getElementById("chat-input").value = transcript;
-        showSubtitle("YOU", transcript);
-      };
-      
-      recognition.onend = function() {
-        isRecording = false;
-        btn.classList.remove("recording");
-        btn.textContent = "🎤";
-        // Auto-send after voice recognition
-        const input = document.getElementById("chat-input");
-        if (input && input.value.trim()) {
-          sendMessage();
-        }
-      };
-      
-      recognition.onerror = function(event) {
-        console.error("Speech recognition error:", event.error);
-        isRecording = false;
-        btn.classList.remove("recording");
-        btn.textContent = "🎤";
-      };
-      
-      recognition.start();
-    }
+    };
+    recognition.onend = () => { isRecording = false; btn.classList.remove("recording"); btn.textContent = "🎤"; sendMessage(); };
+    recognition.start();
   }
-  
-  // Enter key to send
-  document.addEventListener("DOMContentLoaded", function() {
-    const input = document.getElementById("chat-input");
-    if (input) {
-      input.addEventListener("keypress", function(e) {
-        if (e.key === "Enter") {
-          sendMessage();
-        }
-      });
-    }
-  });
-  
-  // Initialize Mini Hologram
-  setTimeout(function() {
-    const container = document.getElementById("mini-hologram");
-    if (container && typeof THREE !== "undefined") {
-      initMiniHologram(container);
-    }
-  }, 500);
-  
+
   function initMiniHologram(container) {
     const scene = new THREE.Scene();
-    scene.background = null;
-    
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
     camera.position.set(0, 0, 2);
-    
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(150, 150);
-    renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const pl = new THREE.PointLight(0x00f3ff, 1, 10); pl.position.set(2, 2, 2); scene.add(pl);
     
-    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambient);
-    const front = new THREE.DirectionalLight(0xffeedd, 1.0);
-    front.position.set(0, 1, 3);
-    scene.add(front);
-    
-    let model = null;
-    
-    const loader = new THREE.GLTFLoader();
-    loader.load("public/hologram.glb", function(gltf) {
-      model = gltf.scene;
-      model.traverse(function(node) {
-        if (node.isMesh) {
-          node.material = new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(0xe8b89d),
-            roughness: 0.55,
-            metalness: 0.0,
-            clearcoat: 0.15,
-            emissive: new THREE.Color(0x331111),
-            emissiveIntensity: 0.1
-          });
-        }
+    new THREE.GLTFLoader().load("public/hologram.glb", (gltf) => {
+      miniHoloModel = gltf.scene;
+      miniHoloModel.traverse(n => {
+        if (n.isMesh) n.material = new THREE.MeshPhysicalMaterial({ color: 0xe8b89d, roughness: 0.5, emissive: 0x331111, emissiveIntensity: 0.1 });
       });
-      
-      const box = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-      model.scale.set(0.8, 0.8, 0.8);
-      scene.add(model);
-    }, undefined, function(err) {
-      const geo = new THREE.SphereGeometry(0.4, 32, 32);
-      const mat = new THREE.MeshPhysicalMaterial({ color: 0xe8b89d, roughness: 0.5 });
-      model = new THREE.Mesh(geo, mat);
-      scene.add(model);
+      const box = new THREE.Box3().setFromObject(miniHoloModel);
+      miniHoloModel.position.sub(box.getCenter(new THREE.Vector3()));
+      miniHoloModel.scale.set(0.8, 0.8, 0.8);
+      scene.add(miniHoloModel);
+    }, null, () => {
+      const g = new THREE.SphereGeometry(0.4, 32, 32);
+      const m = new THREE.MeshPhysicalMaterial({ color: 0xe8b89d });
+      miniHoloModel = new THREE.Mesh(g, m);
+      scene.add(miniHoloModel);
     });
-    
+
     function animate() {
       requestAnimationFrame(animate);
-      if (model) model.rotation.y += 0.005;
+      if (miniHoloModel) {
+        miniHoloModel.rotation.y += 0.005;
+        if (analyser && dataArray) {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0; for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+          let avg = sum / dataArray.length;
+          // Lip sync effect (scale y)
+          let s = 0.8 + (avg / 255) * 0.2;
+          miniHoloModel.scale.set(0.8, s, 0.8);
+        }
+      }
       renderer.render(scene, camera);
     }
     animate();
   }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const cin = document.getElementById("chat-input");
+    if (cin) cin.addEventListener("keypress", (e) => { if(e.key==="Enter") sendMessage(); });
+    setTimeout(() => {
+      const c = document.getElementById("mini-hologram");
+      if (c && typeof THREE !== "undefined") initMiniHologram(c);
+    }, 500);
+  });
   </script>';
 }
 
 function page_footer(): void
 {
-  echo '<footer class="footer">KELION AI • Futuristic Hologram Platform • <a href="k.php?r=privacy">Privacy & GDPR</a> • <a href="k.php?r=terms">Terms</a> • <a href="k.php?r=safety">Safety</a></footer></body></html>';
+  echo '<footer class="footer">KELION AI • v1.1.0 • <a href="k.php?r=privacy">Privacy</a> • <a href="k.php?r=terms">Terms</a></footer></body></html>';
 }
