@@ -1,0 +1,362 @@
+/* KELION AI - Futuristic Theme CSS */
+/* Applies to all pages using page_header/page_footer */
+
+:root {
+    --cyan: #00f3ff;
+    --pink: #ff00ff;
+    --bg: #050510;
+    --panel: rgba(0, 15, 30, 0.95);
+    --border: rgba(0, 243, 255, 0.35);
+    --glow: 0 0 20px rgba(0, 243, 255, 0.25);
+    --text: #e0e0e0;
+    --text-muted: rgba(255, 255, 255, 0.6);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+    color: var(--text);
+    background: radial-gradient(ellipse at center, #0a0a2e 0%, #050510 50%, #000000 100%);
+    line-height: 1.6;
+}
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+/* HUD Header */
+.hud {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background: linear-gradient(180deg, rgba(0, 10, 20, 0.95) 0%, transparent 100%);
+    z-index: 1000;
+}
+
+.hudLeft {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hudTitle {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+    letter-spacing: 3px;
+}
+
+.hudMeta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+}
+
+.hudClock {
+    text-align: right;
+}
+
+.clockFace {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--cyan);
+    text-shadow: 0 0 15px rgba(0, 243, 255, 0.8);
+    letter-spacing: 2px;
+}
+
+/* Top Bar (secondary) */
+.topbar {
+    display: none;
+    /* Hidden - using HUD instead */
+}
+
+/* Main Content Wrapper */
+.wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 120px 20px 80px;
+    min-height: 100vh;
+}
+
+/* Cards */
+.card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: var(--glow);
+    backdrop-filter: blur(10px);
+}
+
+.card h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.6rem;
+    color: var(--cyan);
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+}
+
+/* Grid Layout */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+/* Muted Text */
+.mut {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Form Elements */
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(0, 20, 40, 0.8);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: transparent;
+    border: 1px solid var(--cyan);
+    border-radius: 6px;
+    color: var(--cyan);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.btn:hover {
+    background: var(--cyan);
+    color: #000;
+    box-shadow: 0 0 25px var(--cyan);
+    transform: translateY(-2px);
+}
+
+.btn2 {
+    background: var(--cyan);
+    color: #000;
+}
+
+.btn2:hover {
+    box-shadow: 0 0 30px var(--cyan);
+}
+
+.btnBad {
+    border-color: #ff4444;
+    color: #ff4444;
+}
+
+.btnBad:hover {
+    background: #ff4444;
+    color: #000;
+    box-shadow: 0 0 25px #ff4444;
+}
+
+/* Row Layout */
+.row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Messages */
+.ok {
+    background: rgba(0, 255, 100, 0.15);
+    border: 1px solid rgba(0, 255, 100, 0.4);
+    color: #00ff64;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.err {
+    background: rgba(255, 0, 68, 0.15);
+    border: 1px solid rgba(255, 0, 68, 0.4);
+    color: #ff4466;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+/* Pills/Tags */
+.pill {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(0, 243, 255, 0.2);
+    border-radius: 10px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    margin-left: 8px;
+}
+
+/* Footer */
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 15px 30px;
+    background: linear-gradient(0deg, rgba(0, 10, 20, 0.95) 0%, transparent 100%);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+}
+
+.footer a {
+    color: var(--cyan);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.footer a:hover {
+    text-shadow: 0 0 10px var(--cyan);
+}
+
+/* Chat Interface */
+.chat {
+    max-height: 400px;
+    overflow-y: auto;
+    background: rgba(0, 10, 20, 0.5);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.msg {
+    margin-bottom: 15px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.msg.user {
+    background: rgba(0, 243, 255, 0.1);
+    border-left: 3px solid var(--cyan);
+    margin-left: 20px;
+}
+
+.msg.bot {
+    background: rgba(255, 0, 255, 0.1);
+    border-left: 3px solid var(--pink);
+    margin-right: 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .wrap {
+        padding: 100px 15px 70px;
+    }
+
+    .card {
+        padding: 20px;
+    }
+
+    .hud {
+        padding: 10px 15px;
+    }
+
+    .hudTitle {
+        font-size: 1.1rem;
+    }
+
+    .btn {
+        padding: 10px 18px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Scan Lines Effect */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 50%, rgba(0, 243, 255, 0.02) 50%);
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.3;
+}
+
+/* Glow Animation for Interactive Elements */
+@keyframes glowPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 25px rgba(0, 243, 255, 0.5);
+    }
+}
+
+input:focus,
+.btn:focus {
+    animation: glowPulse 2s ease-in-out infinite;
+}
