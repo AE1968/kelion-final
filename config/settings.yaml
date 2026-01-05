@@ -1,0 +1,10 @@
+# k1 settings (simple YAML: key: value only, no nesting required)
+app_name: k1
+default_language: EN
+data_dir: .k1
+
+# safety
+safe_mode_default: true
+
+# governance (placeholders for later days)
+admin_enabled_default: false

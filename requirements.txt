@@ -1,0 +1,6 @@
+# K1 INTEGRAL - Requirements
+# Version: Day 23 + FINAL Hybrid
+# Python: 3.11+
+
+# K1 uses Python standard library only
+# No external dependencies required for core functionality

@@ -1,0 +1,4 @@
+k1
+version: 2.3
+stage: day23
+compatible_with: day1

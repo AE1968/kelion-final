@@ -1,0 +1,28 @@
+{
+    # Global options
+    # email you@example.com
+}
+
+# ---------
+# LOCAL DEV (TLS with self-signed "internal" CA)
+# Access: https://localhost
+# ---------
+localhost {
+    tls internal
+    reverse_proxy k1:8080
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    }
+}
+
+# ---------
+# PRODUCTION (replace with your real domain)
+# Example:
+# example.com {
+#     tls you@example.com
+#     reverse_proxy k1:8080
+# }
+# ---------
