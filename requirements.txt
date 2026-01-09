@@ -2,5 +2,7 @@
 # Version: Day 23 + FINAL Hybrid
 # Python: 3.11+
 
-# K1 uses Python standard library only
-# No external dependencies required for core functionality
+# Core functionality uses Python standard library only
+
+# Multi-Agent System dependencies
+httpx>=0.25.0  # Async HTTP client for AI API calls
